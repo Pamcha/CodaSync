@@ -61,13 +61,15 @@ namespace {TableImporter.CodeNamespace} {{
 
             foreach (var item in structure.Items) {
                 string type = "";
+                string attributes = "";
+
+                (attributes, type) = GetTypeOf(item);
 
                 if (item.Format.IsArray)
-                    type = $"{GetTypeOf(item)}[]";
-                else
-                    type = GetTypeOf(item);
+                    type = $"{type}[]";
+                
 
-                fields = $"{fields}\n       public {type} {item.Name};";
+                fields = $"{fields}\n        {attributes} public {type} {item.Name};";
             }
 
             return fields;
@@ -99,14 +101,18 @@ namespace {TableImporter.CodeNamespace} {{
             return false;
         }
 
-        private static string GetTypeOf(TableColumn column) {
+        private static (string, string) GetTypeOf(TableColumn column) {
             string type = "";
+            string attributes = "";
             ColumnType columnType = column.Format.Type;
 
             switch (columnType) {
+                case ColumnType.canvas:
+                    type = "string";
+                    attributes = "[TextArea]";
+                    break;
                 case ColumnType.text:
                 case ColumnType.select:
-                case ColumnType.canvas:
                     type = "string";
                     break;
                 case ColumnType.number:
@@ -129,7 +135,7 @@ namespace {TableImporter.CodeNamespace} {{
                     break;
             }
 
-            return type;
+            return (attributes, type);
         }
     }
 
