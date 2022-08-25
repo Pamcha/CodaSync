@@ -62,8 +62,16 @@ namespace Com.Pamcha.CodaSync {
             AssetRef[] refs = new AssetRef[rows.Length];
 
             for (int i = 0; i < rows.Length; i++) {
+                string assetIdString = rows[i].Values[GetColumnIdByName(structure, "AssetId")];
+                bool success = int.TryParse(assetIdString, out int assetId);
+
+                if (!success) {
+                    Debug.LogWarning($"Coda Sync : Asset {rows[i].Values[GetColumnIdByName(structure, "AssetName")]} can't be referenced, invalid assetId, check your AssetReferences in Coda");
+                    continue;
+                }
+
                 refs[i] = new AssetRef() {
-                    AssetId = int.Parse((rows[i].Values[GetColumnIdByName(structure, "AssetId")])),
+                    AssetId = assetId,
                     AssetName = rows[i].Values[GetColumnIdByName(structure, "AssetName")],
                     AssetPath = rows[i].Values[GetColumnIdByName(structure, "AssetPath")]
                 };
@@ -92,7 +100,7 @@ namespace Com.Pamcha.CodaSync {
                 instances[i] = AssetDatabase.LoadAssetAtPath(assetPath, objectType);
 
                 if (instances[i] == null) {
-                    instances[i] = Activator.CreateInstance(objectType);
+                    instances[i] = ScriptableObject.CreateInstance(objectType);
                     AssetDatabase.CreateAsset(instances[i], assetPath);
                 }
 
@@ -101,6 +109,10 @@ namespace Com.Pamcha.CodaSync {
 
             FieldInfo instanceListField = databaseType.GetField($"List", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
             instanceListField.SetValue(database, instanceList);
+
+            EditorUtility.SetDirty(database);
+            AssetDatabase.SaveAssetIfDirty(database);
+
             return instances;
         }
 
@@ -108,8 +120,11 @@ namespace Com.Pamcha.CodaSync {
             Type objectType = allTypes[$"{TableImporter.CodeNamespace}.{structure.Name}"];
 
             //Set Assets Fields
+
             for (int i = 0; i < rows.Length; i++) {
                 SetFields(structure, objectType, instances[i], rows[i].Values);
+                EditorUtility.SetDirty(instances[i]);
+                AssetDatabase.SaveAssetIfDirty(instances[i]);
             }
         }
 
@@ -119,7 +134,7 @@ namespace Com.Pamcha.CodaSync {
             foreach (var key in fields.Keys) {
                 TableColumn? column = GetColumnById(structure, key);
                 if (column == null) {
-                    Debug.LogWarning($"Can't find Column structure data for Column {key}");
+                    Debug.LogWarning($"Coda Sync : Can't find Column structure data for Column {key}");
                     continue;
                 }
 

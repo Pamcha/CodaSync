@@ -1,0 +1,93 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 442f491e26eabd547bb047a2a91074a0, type: 3}
+  m_Name: Demo_TableImporter
+  m_EditorClassIdentifier: 
+  requester: {fileID: 11400000, guid: f06755d128afd664c96dcdace23b0686, type: 2}
+  documentURL: https://coda.io/d/Coda-Sync-template_dAT5a7-v1Oh/Test-data_suOv2#_luJ7M
+  documentId: AT5a7-v1Oh
+  lastSyncDateString: Thu, 25 Aug 2022 09:31:09 GMT
+  lastSyncLocalDateString: Thu, 25 Aug 2022 11:31:09 GMT
+  codeNamespace: Com.DefaultCompany.Table
+  tableSelection:
+  - tableDescription:
+      id: grid--JihCaWIrw
+      type: table
+      tableType: table
+      name: Characters
+    selected: 0
+  - tableDescription:
+      id: grid-6cn86Emc5i
+      type: table
+      tableType: table
+      name: Traits
+    selected: 0
+  - tableDescription:
+      id: grid-14sSmAggPx
+      type: table
+      tableType: table
+      name: AudioClip
+    selected: 1
+  - tableDescription:
+      id: grid-P7UmbP0H5x
+      type: table
+      tableType: table
+      name: Weapons
+    selected: 0
+  - tableDescription:
+      id: grid-GLDJ4vl9JD
+      type: table
+      tableType: table
+      name: Sprite
+    selected: 1
+  - tableDescription:
+      id: grid-DLATaJriHc
+      type: table
+      tableType: table
+      name: Armor
+    selected: 1
+  - tableDescription:
+      id: grid-2WS79EIcns
+      type: table
+      tableType: table
+      name: Enemies
+    selected: 0
+  - tableDescription:
+      id: grid-3zOQjy_XVi
+      type: table
+      tableType: table
+      name: Weaknesses
+    selected: 0
+  - tableDescription:
+      id: table-kPshkSbmEK
+      type: table
+      tableType: view
+      name: Simple views of Characters
+    selected: 0
+  - tableDescription:
+      id: table-HWFmvSnc9d
+      type: table
+      tableType: view
+      name: Characters Chart
+    selected: 0
+  - tableDescription:
+      id: grid-7xA3OcuUPf
+      type: table
+      tableType: table
+      name: Material
+    selected: 1
+  - tableDescription:
+      id: grid-sUTHs6WjFe
+      type: table
+      tableType: table
+      name: Animation
+    selected: 1

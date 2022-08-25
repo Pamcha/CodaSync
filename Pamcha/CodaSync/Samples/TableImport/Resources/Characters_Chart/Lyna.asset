@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5ac5a1643a6f68c42b6cd37f8d1fa162, type: 3}
+  m_Name: Lyna
+  m_EditorClassIdentifier: 
+  Name: Lyna
+  Health: 50
+  Info: 'Frail but well equipped, a dangerous foe!
+
+'
+  Traits:
+  - {fileID: 11400000, guid: 5144afc7095e1624088254abb9acf1ce, type: 2}
+  Weaknesses:
+  - {fileID: 11400000, guid: 6622b417b2e8cdd4fae13326cd524a50, type: 2}
+  Parent: {fileID: 0}
+  Armor:
+  - {fileID: 11400000, guid: bfaf95dd76e828a49b065fe87e4e953e, type: 2}
+  Weapons: {fileID: 11400000, guid: 2b6efa5fdf67ab247b9173796f770a35, type: 2}
+  CharacterSprites: {fileID: 0}
+  Description: Probably has a degree or something.
+  Armor_Attack_Bonus: 30

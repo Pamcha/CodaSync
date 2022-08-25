@@ -1,0 +1,27 @@
+{
+  "name"             : "com.pamcha.codasync",
+  "version"          : "1.0",
+  "displayName"      : "Coda Sync",
+  "description"      : "An easy-to-use database system for your Unity Games based on Coda.io.
+  With Coda Sync for Unity, you create and edit all your game’s data in a collaborative environment designed for teams!",
+  "documentationUrl" : "https://coda.io/d/Coda-Sync-for-Unity_d3gQo_hM3sZ/Coda-Sync-for-Unity_suC2q#_luf7C",
+  "hideInEditor"     : "false",
+  "keywords"         : [
+    "Coda",
+    "Database",
+    "ScriptableObject",
+    "Collaboration"
+  ],
+  "author"           : {
+    "name"  : "Maxence Deschamps",
+    "email" : "tools-support@pamcha.com",
+    "url"   : "https://pamcha.com"
+  },
+  "samples"          : [
+    {
+      "displayName" : "Example data",
+      "description" : "Example data imported from the example data set. (See : https://coda.io/d/Coda-Sync-template_dAT5a7-v1Oh/Test-data_suOv2)",
+      "path"        : "Samples/"
+    }
+  ]
+}

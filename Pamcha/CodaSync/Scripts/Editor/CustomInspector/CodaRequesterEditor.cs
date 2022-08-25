@@ -36,7 +36,7 @@ namespace Com.Pamcha.CodaSync {
             connectionTestResult = $"Response : {req.result}";
 
             if (req.result == UnityWebRequest.Result.Success) {
-                connectionTestResult = $"{connectionTestResult}\n{req.downloadHandler.text}";
+                connectionTestResult = $"Connection test success !";
                 messageType = MessageType.Info;
             } else {
                 connectionTestResult = $"{connectionTestResult}\nResponse Code : {req.responseCode}\n{req.error}";

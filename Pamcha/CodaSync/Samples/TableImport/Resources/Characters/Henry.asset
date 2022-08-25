@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 736174df73e7cf94392c76a6cf3550d6, type: 3}
+  m_Name: Henry
+  m_EditorClassIdentifier: 
+  Name: Henry
+  Health: 70
+  Info: Look out, he is always up to something.
+  Traits:
+  - {fileID: 11400000, guid: 081c8445ffe1d3f4eafa1440d9e67597, type: 2}
+  - {fileID: 11400000, guid: 1fb11b63335a7ae408a9f02236f0f7bf, type: 2}
+  Parent: {fileID: 11400000, guid: f7e2925dbffdb0c44aef86d7e75db388, type: 2}
+  Armor: []
+  Weapons: {fileID: 11400000, guid: 9b2abc155c4a94741b2ddfdb2da983b5, type: 2}
+  CharacterSprites: {fileID: 0}
+  Weaknesses:
+  - {fileID: 11400000, guid: 3cc7afffda04ccc4bb804ed322c9a49c, type: 2}
+  Description: "Make sure you keep an eye on this one.,Don\u2019t even bother..."
+  Armor_Attack_Bonus: 0

@@ -22,7 +22,7 @@ namespace Com.Pamcha.CodaSync {
         public string Type { get => type; set { type = value; } }
         public string TableType { get => tableType; set { tableType = value; } }
         public string UnmodifiedName { get => name; set => name = value; }
-        public string Name { get => string.IsNullOrEmpty(name) ? "" : name.Trim().Replace(' ', '_'); }
+        public string Name { get => string.IsNullOrEmpty(name) ? "" : name.Trim().Replace(' ', '_').Replace('-', '_'); }
         public TableColumn[] Items { get => items; set { items = value; } }
     }
 
@@ -37,7 +37,7 @@ namespace Com.Pamcha.CodaSync {
         private ColumnFormat format;
 
         public string Id { get => id; }
-        public string Name { get => string.IsNullOrEmpty(name) ? "" : name.Trim().Replace(' ', '_'); }
+        public string Name { get => string.IsNullOrEmpty(name) ? "" : name.Trim().Replace(' ', '_').Replace('-', '_'); }
         public ColumnFormat Format { get => format; }
     }
 
@@ -62,7 +62,7 @@ namespace Com.Pamcha.CodaSync {
         private string name;
 
         public string Id { get => id; }
-        public string Name { get => string.IsNullOrEmpty(name) ? "" : name.Trim().Replace(' ', '_'); }
+        public string Name { get => string.IsNullOrEmpty(name) ? "" : name.Trim().Replace(' ', '_').Replace('-', '_'); }
     }
 
     public enum ColumnType {
@@ -89,7 +89,7 @@ namespace Com.Pamcha.CodaSync {
         private Dictionary<string, string> values;
 
         public string Id { get => id; }
-        public string Name { get => string.IsNullOrEmpty(name) ? "" : name.Trim().Replace(' ', '_'); }
+        public string Name { get => string.IsNullOrEmpty(name) ? "" : name.Trim().Replace(' ', '_').Replace('-', '_'); }
         public Dictionary<string, string> Values { get => values; }
     }
     #endregion
