@@ -248,6 +248,25 @@ namespace Com.Pamcha.CodaSync {
 
             return allTypes;
         }
+
+        private bool DoClassExist(string fullClassname) {
+            // Liste de toutes les assembly du projet (je suis pas sûr de ce que c'est une assembly)
+            Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
+
+            for (int i = 0; i < assemblies.Length; i++) {
+                // Liste de toutes les types de ton projet
+                Type[] types = assemblies[i].GetTypes();
+
+                for (int j = 0; j < types.Length; j++) {
+
+                    // Et là t'as trouvé ta classe
+                    if (types[j].FullName == fullClassname)
+                        return true;
+                }
+            }
+
+            return false;
+        }
         private static Type GetType(TableColumn column) {
             Type type = null;
             ColumnType columnType = column.Format.Type;

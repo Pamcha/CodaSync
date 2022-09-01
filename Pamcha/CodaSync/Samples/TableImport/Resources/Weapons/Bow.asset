@@ -15,6 +15,6 @@ MonoBehaviour:
   Name: Bow
   Attack_Bonus: 20
   Defense_Bonus: 0
-  EquipementSprites: {fileID: 0}
+  EquipementSprites: {fileID: 21300000, guid: 010c09d9795e144cf9d984cc5bf93c59, type: 3}
   UseCount: 2
   type: longRange

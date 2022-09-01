@@ -15,6 +15,6 @@ MonoBehaviour:
   Name: Poison
   Attack_Bonus: 30
   Defense_Bonus: 0
-  EquipementSprites: {fileID: 0}
+  EquipementSprites: {fileID: 21300000, guid: 99171decffa214bcc95c86d80decc386, type: 3}
   UseCount: 0
   type: longRange

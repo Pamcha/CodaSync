@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3fb144df6d06bc64280a28ae755063f0, type: 3}
-  m_Name: ExportTest
+  m_Name: AssetRefExportDemo
   m_EditorClassIdentifier: 
   requester: {fileID: 11400000, guid: f06755d128afd664c96dcdace23b0686, type: 2}
   documentURL: https://coda.io/d/Coda-Sync-template_dAT5a7-v1Oh/Asset-References_submC#_luUPf

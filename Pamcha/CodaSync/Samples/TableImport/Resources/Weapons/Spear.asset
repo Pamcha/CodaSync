@@ -15,6 +15,6 @@ MonoBehaviour:
   Name: Spear
   Attack_Bonus: 30
   Defense_Bonus: 5
-  EquipementSprites: {fileID: 21300000, guid: f6caee0dbe7ab674da082389cea23df9, type: 3}
+  EquipementSprites: {fileID: 21300000, guid: 0e179408b20ad43b8a6b36fa677ee18b, type: 3}
   UseCount: 1
   type: closeCombat

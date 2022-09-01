@@ -15,6 +15,6 @@ MonoBehaviour:
   Name: Spell Book
   Attack_Bonus: 30
   Defense_Bonus: 40
-  EquipementSprites: {fileID: 0}
+  EquipementSprites: {fileID: 21300000, guid: 5ae500c22f5c74d1aa5758c0191c216a, type: 3}
   UseCount: 1
   type: longRange

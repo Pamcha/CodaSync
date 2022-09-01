@@ -15,6 +15,6 @@ MonoBehaviour:
   Name: Sword
   Attack_Bonus: 25
   Defense_Bonus: 0
-  EquipementSprites: {fileID: 0}
+  EquipementSprites: {fileID: 21300000, guid: bd77480a2712d4ab79491717e200ac30, type: 3}
   UseCount: 2
   type: closeCombat

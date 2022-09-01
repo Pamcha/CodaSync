@@ -23,7 +23,7 @@ MonoBehaviour:
   Armor:
   - {fileID: 11400000, guid: bfaf95dd76e828a49b065fe87e4e953e, type: 2}
   Weapons: {fileID: 11400000, guid: 2b6efa5fdf67ab247b9173796f770a35, type: 2}
-  CharacterSprites: {fileID: 0}
+  CharacterSprites: {fileID: 21300000, guid: fdff64de9712e4b60a21f5ae1f61920c, type: 3}
   Weaknesses:
   - {fileID: 11400000, guid: 6622b417b2e8cdd4fae13326cd524a50, type: 2}
   Description: Probably has a degree or something.
