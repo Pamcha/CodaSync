@@ -4,6 +4,9 @@
   "displayName"      : "Coda Sync",
   "description"      : "An easy-to-use database system for your Unity Games based on Coda.io.
   With Coda Sync for Unity, you create and edit all your game’s data in a collaborative environment designed for teams!",
+  "dependencies"     : {
+    "com.unity.editorcoroutines" : "1.0.0"
+  },
   "documentationUrl" : "https://coda.io/d/Coda-Sync-for-Unity_d3gQo_hM3sZ/Coda-Sync-for-Unity_suC2q#_luf7C",
   "hideInEditor"     : "false",
   "keywords"         : [
