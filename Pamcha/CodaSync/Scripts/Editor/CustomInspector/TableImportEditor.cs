@@ -18,7 +18,10 @@ namespace Com.Pamcha.CodaSync {
 
             SerializedProperty date = serializedObject.FindProperty("lastSyncDateString");
 
-            script.lastSyncLocalDateString = $"{DateTime.Parse(date.stringValue).ToLocalTime():R}";
+            if (string.IsNullOrEmpty(date.stringValue))
+                script.lastSyncLocalDateString = "Never";
+            else
+                script.lastSyncLocalDateString = $"{DateTime.Parse(date.stringValue).ToLocalTime():R}";
 
             EditorGUILayout.Space(30);
 
