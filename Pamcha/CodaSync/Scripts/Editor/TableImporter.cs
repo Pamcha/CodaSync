@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Unity.Plastic.Newtonsoft.Json;
 using UnityEditor;
+using UnityEditor.Compilation;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -27,12 +29,21 @@ namespace Com.Pamcha.CodaSync {
                 GetTableList(OnUpdateTableList);
             }
 
-            /// Try create instances after a recompilation
-            if (EditorPrefs.GetBool(editorPrefKeyShouldCreateInstances)) {
+            if (EditorPrefs.GetBool(editorPrefKeyShouldCreateInstances, true)) {
                 EditorPrefs.SetBool(editorPrefKeyShouldCreateInstances, false);
                 CreateInstances();
             }
         }
+
+        private void OnCompilation(string s, CompilerMessage[] messages) {
+            CompilationPipeline.assemblyCompilationFinished -= OnCompilation;
+
+            if (messages.Count(message => message.type == CompilerMessageType.Error) > 0) {
+                EditorUtility.ClearProgressBar();
+                EditorPrefs.SetBool(editorPrefKeyShouldCreateInstances, false);
+            }
+        }
+
         public void OnUpdateTableList(TableDescriptionData[] tableList) {
             List<TableSelection> newTableSelection = new List<TableSelection>();
 
@@ -88,6 +99,7 @@ namespace Com.Pamcha.CodaSync {
             if (EditorApplication.isCompiling) {
                 EditorPrefs.SetBool(editorPrefKeyShouldCreateInstances, true);
                 EditorUtility.DisplayProgressBar("Coda Table Import", "Waiting compilation", .6f);
+                CompilationPipeline.assemblyCompilationFinished += OnCompilation;
             } else
                 CreateInstances();
         }
