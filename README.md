@@ -13,11 +13,11 @@ Your data are imported as Scriptable Objects by automatically generating a class
 
 You can sync again any time, whenever you have made a change to your data on your doc(s).
 
-![1. Create and design your data](https://imgur.com/WMECWzs)
-![2. Make the perfect database for your game](https://imgur.com/Njc1oZc)
-![3. Setup your Unity project](https://imgur.com/3EY5bju)
-![4. Sync your asset references in your tables](https://imgur.com/PPE9n4X)
-![5. Generate and update your data anytime](https://imgur.com/gdIBu1n)
+![1. Create and design your data](https://i.imgur.com/WMECWzs.png)
+![2. Make the perfect database for your game](https://i.imgur.com/Njc1oZc.png)
+![3. Setup your Unity project](https://i.imgur.com/3EY5bju.png)
+![4. Sync your asset references in your tables](https://i.imgur.com/PPE9n4X.png)
+![5. Generate and update your data anytime](https://i.imgur.com/gdIBu1n.png)
 
 ⚠️ Please note that you need to create a free account on [coda.io](https://coda.io) to create your docs. Coda.io offers a generous free tier that should cover most of your needs.
 
@@ -29,9 +29,22 @@ You can sync again any time, whenever you have made a change to your data on you
 
 This project has a dependency to `com.unity.editorcoroutines` package that will be automatically installed if not already installed in your project.
 
-### Using Git
+### Using Package Manager
+In the package Manager Window (`Window/Package Manager`) click on the little plus sign (+) on the top left corner. 
+Select "Import package from Git URL" and type `https://github.com/Pamcha/CodaSync.git`.
+
+### Using Git and Manifest.json
 
 Find the manifest.json file in the Packages folder of your project and add a line to `dependencies` field.
 
 * `"com.pamcha.codasync": "https://github.com/Pamcha/CodaSync.git"`
 
+## Technical details
+* Converts Coda tables into Unity Scriptable Object classes
+* Converts table entries into instances of these classes
+* Stores all theses instances in a database class that is easily accessible for your code
+* And since these data are Scriptable Objects, they can easily be serialized and use anywhere in your game project
+
+Works on all platform since what you get are Scriptable Objects.
+
+Please note that these Scriptable Objects are generated/updated on the editor, not on runtime. Therefore Coda Sync for Unity is *not* a live Ops tool, but instead a great way to manage all your game data in a collaborative and easy to use environment.
