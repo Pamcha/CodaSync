@@ -17,6 +17,30 @@ MonoBehaviour:
   documentId: AT5a7-v1Oh
   lastSyncDateString: Thu, 25 Aug 2022 08:43:25 GMT
   lastSyncLocalDateString: 
-  assetFolder: Assets/Pamcha/CodaSync/Samples/AssetsReference/AudioClip
+  assetFolder:
+  - Assets//Pamcha/CodaSync/Samples/AssetsReference/AudioClip
+  - Assets//Pamcha/CodaSync/Samples/AssetsReference/Sprites
   assets:
   - {fileID: 8300000, guid: c1591428495c88049b4d5bf464226193, type: 3}
+  - {fileID: 2800000, guid: f112cebd89ab34c419554734edd05da4, type: 3}
+  - {fileID: 21300000, guid: f112cebd89ab34c419554734edd05da4, type: 3}
+  - {fileID: 2800000, guid: 8aab60c83b31948ada098bdf2c6266ed, type: 3}
+  - {fileID: 21300000, guid: 8aab60c83b31948ada098bdf2c6266ed, type: 3}
+  - {fileID: 2800000, guid: 010c09d9795e144cf9d984cc5bf93c59, type: 3}
+  - {fileID: 21300000, guid: 010c09d9795e144cf9d984cc5bf93c59, type: 3}
+  - {fileID: 2800000, guid: 9fcc046b59ec042689068df19e8c7595, type: 3}
+  - {fileID: 21300000, guid: 9fcc046b59ec042689068df19e8c7595, type: 3}
+  - {fileID: 2800000, guid: c9e643e3ba3af46e8bac69096ef68f1f, type: 3}
+  - {fileID: 21300000, guid: c9e643e3ba3af46e8bac69096ef68f1f, type: 3}
+  - {fileID: 2800000, guid: fdff64de9712e4b60a21f5ae1f61920c, type: 3}
+  - {fileID: 21300000, guid: fdff64de9712e4b60a21f5ae1f61920c, type: 3}
+  - {fileID: 2800000, guid: b9b865bf90c9c45dea9ff822df43c7f1, type: 3}
+  - {fileID: 21300000, guid: b9b865bf90c9c45dea9ff822df43c7f1, type: 3}
+  - {fileID: 2800000, guid: 99171decffa214bcc95c86d80decc386, type: 3}
+  - {fileID: 21300000, guid: 99171decffa214bcc95c86d80decc386, type: 3}
+  - {fileID: 2800000, guid: 0e179408b20ad43b8a6b36fa677ee18b, type: 3}
+  - {fileID: 21300000, guid: 0e179408b20ad43b8a6b36fa677ee18b, type: 3}
+  - {fileID: 2800000, guid: 5ae500c22f5c74d1aa5758c0191c216a, type: 3}
+  - {fileID: 21300000, guid: 5ae500c22f5c74d1aa5758c0191c216a, type: 3}
+  - {fileID: 2800000, guid: bd77480a2712d4ab79491717e200ac30, type: 3}
+  - {fileID: 21300000, guid: bd77480a2712d4ab79491717e200ac30, type: 3}

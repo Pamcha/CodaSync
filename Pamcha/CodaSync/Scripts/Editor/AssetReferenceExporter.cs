@@ -8,7 +8,7 @@ using static Com.Pamcha.CodaSync.CodaRequester;
 namespace Com.Pamcha.CodaSync {
     [CreateAssetMenu(fileName = "AssetReferenceExporter", menuName = "CodaSync/Asset Reference Exporter")]
     public class AssetReferenceExporter : ImporterExporter {
-        [SerializeField] private string assetFolder;
+        [SerializeField] private string[] assetFolder;
         [SerializeField] private Object[] assets = new Object[0];
 
 
@@ -21,6 +21,21 @@ namespace Com.Pamcha.CodaSync {
         public void ExportReferences () {
             EditorUtility.DisplayProgressBar("Coda Table Import", "Fetching Table List", 0);
             GetTableList((tables) => GetTablesStructure(tables.ToList(), OnTableListResponse));
+        }
+
+        public void AddFolder(string path) {
+            string[] newFolders = new string[assetFolder.Length + 1];
+
+            for (int i = 0; i < newFolders.Length; i++) {
+                if (i < newFolders.Length - 1)
+                    newFolders[i] = assetFolder[i];
+                else
+                    newFolders[i] = path;
+            }
+
+            assetFolder = newFolders;
+
+            LoadAssets();
         }
 
         private void OnTableListResponse(TableStructure[] tableList) {
@@ -111,17 +126,21 @@ namespace Com.Pamcha.CodaSync {
             assets = FindAssetsAt(assetFolder);
         }
 
-        public static Object[] FindAssetsAt (string folder) {
-            if (string.IsNullOrEmpty(folder))
-                return new Object[0];
-
-            string[] guids = AssetDatabase.FindAssets($"", new[] { folder });
+        public static Object[] FindAssetsAt (string[] folders) {
             List<Object> assets = new List<Object>();
 
-            for (int i = 0; i < guids.Length; i++) {
-                string assetPath = AssetDatabase.GUIDToAssetPath(guids[i]);
-                assets.AddRange(AssetDatabase.LoadAllAssetsAtPath(assetPath));
+            foreach (string folder in folders) {
+                if (string.IsNullOrEmpty(folder))
+                    continue;
+
+                string[] guids = AssetDatabase.FindAssets($"", new[] { folder });
+
+                for (int i = 0; i < guids.Length; i++) {
+                    string assetPath = AssetDatabase.GUIDToAssetPath(guids[i]);
+                    assets.AddRange(AssetDatabase.LoadAllAssetsAtPath(assetPath));
+                }
             }
+            
             return assets.ToArray();
         }
 

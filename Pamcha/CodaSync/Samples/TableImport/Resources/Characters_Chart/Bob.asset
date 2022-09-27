@@ -26,7 +26,7 @@ MonoBehaviour:
   Armor:
   - {fileID: 11400000, guid: bfaf95dd76e828a49b065fe87e4e953e, type: 2}
   Weapons: {fileID: 11400000, guid: 9b2abc155c4a94741b2ddfdb2da983b5, type: 2}
-  CharacterSprites: {fileID: 0}
+  CharacterSprites: {fileID: 21300000, guid: 8aab60c83b31948ada098bdf2c6266ed, type: 3}
   Description: This character is the kindest of them all !,Could outrun a leopard
     !
   Armor_Attack_Bonus: 30

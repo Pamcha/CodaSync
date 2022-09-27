@@ -26,4 +26,4 @@ MonoBehaviour:
   Weaknesses:
   - {fileID: 11400000, guid: 6622b417b2e8cdd4fae13326cd524a50, type: 2}
   Description: This character is  a strong one!
-  Armor_Attack_Bonus: 510
+  Armor_Attack_Bonus: 5.1

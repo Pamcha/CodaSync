@@ -24,6 +24,6 @@ MonoBehaviour:
   - {fileID: 11400000, guid: d256cad8799e6a447b6e2120d22a23e8, type: 2}
   - {fileID: 11400000, guid: 1c8e89d1c252caf4096ad8b086568c71, type: 2}
   Weapons: {fileID: 11400000, guid: 718c62f1e7870d94496bfb68fd9d2385, type: 2}
-  CharacterSprites: {fileID: 0}
+  CharacterSprites: {fileID: 21300000, guid: 9fcc046b59ec042689068df19e8c7595, type: 3}
   Description: This character is  a strong one!
   Armor_Attack_Bonus: 5.1

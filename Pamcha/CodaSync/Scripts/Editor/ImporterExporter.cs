@@ -26,6 +26,7 @@ namespace Com.Pamcha.CodaSync {
             "Material",
             "AnimatorController",
             "Animation",
+            "GameObject"
         };
 
         protected virtual void OnValidate() {
