@@ -6,7 +6,7 @@ With Coda Sync for Unity, you create and edit all your game’s data in a collab
 
 <<[Website](https://coda.io/@pamcha/coda-sync "Coda Sync Website") | [Documentation](https://coda.io/@pamcha/coda-sync/documentation-1 "Coda Sync Documentation") | [Tips and tricks](https://coda.io/@pamcha/coda-sync/tips-tricks-9 "Coda Sync Tips and tricks")>>
 
-![Coda Sync Cover](https://imgur.com/rDYUp8K)
+![Coda Sync Cover](https://i.imgur.com/rDYUp8K.png)
 
 Coda Sync for Unity allows you to synchronize the tables you have created in a coda doc (on coda.io) in your Unity Project.
 Your data are imported as Scriptable Objects by automatically generating a class and its instances, and ready to be used anywhere in your code or in the inspector.
