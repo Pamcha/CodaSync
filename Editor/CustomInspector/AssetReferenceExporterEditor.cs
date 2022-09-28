@@ -68,7 +68,6 @@ namespace Com.Pamcha.CodaSync {
         }
 
         private void AddFolder (string path) {
-            Debug.Log($"Add {path}");
             string projectPath = Application.dataPath;
 
             if (path.Contains(projectPath)) {
