@@ -24,7 +24,7 @@
     {
       "displayName" : "Example data",
       "description" : "Example data imported from the example data set. (See : https://coda.io/d/Coda-Sync-template_dAT5a7-v1Oh/Test-data_suOv2)",
-      "path"        : "Samples"
+      "path"        : "Samples~/ExampleData"
     }
   ]
 }
