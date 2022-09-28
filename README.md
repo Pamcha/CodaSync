@@ -3,7 +3,8 @@ Coda Sync for Unity
 
 An easy-to-use database system for your Unity Games based on Coda.io.
 With Coda Sync for Unity, you create and edit all your game’s data in a collaborative environment designed for teams!
-![](https://img.shields.io/badge/Coda-EE5A29?style=for-the-badge&logo=coda&logoColor=white)  ![](https://img.shields.io/badge/Unity-100000?style=for-the-badge&logo=unity&logoColor=white)  ![GitHub](https://img.shields.io/github/license/pamcha/codasync?label=Licence)  ![](https://img.shields.io/badge/Unity%202021.x-supported-blue.svg)  
+
+![](https://img.shields.io/badge/Coda-EE5A29?style=flat&logo=coda&logoColor=white)  ![](https://img.shields.io/badge/Unity-100000?style=flat&logo=unity&logoColor=white)  ![GitHub](https://img.shields.io/github/license/pamcha/codasync?label=Licence)  ![](https://img.shields.io/badge/Unity%202021.x-supported-blue.svg)  
 
 <<[Website](https://coda.io/@pamcha/coda-sync "Coda Sync Website") | [Documentation](https://coda.io/@pamcha/coda-sync/documentation-1 "Coda Sync Documentation") | [Tips and tricks](https://coda.io/@pamcha/coda-sync/tips-tricks-9 "Coda Sync Tips and tricks")>>
 
@@ -26,7 +27,7 @@ You can sync again any time, whenever you have made a change to your data on you
 
 ## Installation
 ### Requirement
-![](https://img.shields.io/badge/Coda-EE5A29?style=for-the-badge&logo=coda&logoColor=white)  ![](https://img.shields.io/badge/Unity%202021.x-supported-blue.svg)
+![](https://img.shields.io/badge/Coda-EE5A29?style=flat&logo=coda&logoColor=white)  ![](https://img.shields.io/badge/Unity%202021.x-supported-blue.svg)
 
 This project has a dependency to `com.unity.editorcoroutines` package that will be automatically installed if not already installed in your project.
 
