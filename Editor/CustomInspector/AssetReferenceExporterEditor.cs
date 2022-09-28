@@ -68,12 +68,13 @@ namespace Com.Pamcha.CodaSync {
         }
 
         private void AddFolder (string path) {
+            Debug.Log($"Add {path}");
             string projectPath = Application.dataPath;
 
             if (path.Contains(projectPath)) {
                 string[] paths = path.Split(projectPath);
 
-                script.AddFolder($"Assets/{paths[1]}");
+                script.AddFolder($"Assets{paths[1]}");
             } else {
                 Debug.LogError($"Selected folder can't be outside of current Unity project");
             }
