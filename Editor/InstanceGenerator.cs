@@ -17,7 +17,7 @@ namespace Com.Pamcha.CodaSync {
         private static Dictionary<string, Type> allTypes;
         private static string basePath;
 
-        private static Dictionary<Type, AssetRef[]> assetRefs = new Dictionary<Type, AssetRef[]>();
+        private static Dictionary<Type, Dictionary<string, AssetRef>> assetRefs = new Dictionary<Type, Dictionary<string, AssetRef>>();
 
         public static void CreateAllInstances(TableStructure[] structures, TableRow[][] tablesRows, string path) {
             LoadAssetRefs(structures, tablesRows);
@@ -26,7 +26,7 @@ namespace Com.Pamcha.CodaSync {
             basePath = path;
 
             for (int i = 0; i < structures.Length; i++) {
-                if (ImporterExporter.TypeTables.Contains(structures[i].UnmodifiedName))
+                if (structures[i].UnmodifiedName == ImporterExporter.assetReferencesTableName)
                     continue;
 
                 string instancePath = $"{path}/{structures[i].Name}";
@@ -38,7 +38,7 @@ namespace Com.Pamcha.CodaSync {
 
 
             for (int i = 0; i < structures.Length; i++) {
-                if (ImporterExporter.TypeTables.Contains(structures[i].UnmodifiedName))
+                if (structures[i].UnmodifiedName == ImporterExporter.assetReferencesTableName)
                     continue;
 
                 SetAllFields(structures[i], instances[structures[i]], tablesRows[i]);
@@ -52,14 +52,15 @@ namespace Com.Pamcha.CodaSync {
             for (int i = 0; i < structures.Length; i++) {
                 TableStructure structure = structures[i];
 
-                if (ImporterExporter.TypeTables.Contains(structure.UnmodifiedName)) {
-                    assetRefs[GetAssetType(structure.UnmodifiedName)] = GetAssetRefs(structure, tablesRows[i]);
+                if (structure.UnmodifiedName == ImporterExporter.assetReferencesTableName) {
+                    assetRefs = GetAssetRefs(structure, tablesRows[i]);
+                    break;
                 }
             }
         }
 
-        private static AssetRef[] GetAssetRefs(TableStructure structure, TableRow[] rows) {
-            AssetRef[] refs = new AssetRef[rows.Length];
+        private static Dictionary<Type, Dictionary<string, AssetRef>> GetAssetRefs(TableStructure structure, TableRow[] rows) {
+            Dictionary<Type, Dictionary<string, AssetRef>> refs = new Dictionary<Type, Dictionary<string, AssetRef>>();
 
             for (int i = 0; i < rows.Length; i++) {
                 string assetIdString = rows[i].Values[GetColumnIdByName(structure, "AssetId")];
@@ -70,7 +71,12 @@ namespace Com.Pamcha.CodaSync {
                     continue;
                 }
 
-                refs[i] = new AssetRef() {
+                Type assetType = GetAssetType(rows[i].Values[GetColumnIdByName(structure, "AssetType")]);
+
+                if (!refs.ContainsKey(assetType))
+                    refs[assetType] = new Dictionary<string, AssetRef>();
+
+                refs[assetType][rows[i].Values[GetColumnIdByName(structure, "AssetName")]] = new AssetRef() {
                     AssetId = assetId,
                     AssetName = rows[i].Values[GetColumnIdByName(structure, "AssetName")],
                     AssetPath = rows[i].Values[GetColumnIdByName(structure, "AssetPath")]
@@ -250,7 +256,7 @@ namespace Com.Pamcha.CodaSync {
         }
 
         private bool DoClassExist(string fullClassname) {
-            // Liste de toutes les assembly du projet (je suis pas sûr de ce que c'est une assembly)
+            // Liste de toutes les assembly du projet (je suis pas s?r de ce que c'est une assembly)
             Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
 
             for (int i = 0; i < assemblies.Length; i++) {
@@ -259,7 +265,7 @@ namespace Com.Pamcha.CodaSync {
 
                 for (int j = 0; j < types.Length; j++) {
 
-                    // Et là t'as trouvé ta classe
+                    // Et l? t'as trouv? ta classe
                     if (types[j].FullName == fullClassname)
                         return true;
                 }
@@ -289,7 +295,7 @@ namespace Com.Pamcha.CodaSync {
                     type = typeof(DateTime);
                     break;
                 case ColumnType.lookup:
-                    if (ImporterExporter.TypeTables.Contains(column.Format.Table.Name))
+                    if (column.Format.Table.Name == ImporterExporter.assetReferencesTableName)
                         type = GetAssetType(column.Format.Table.Name);
                     else
                         type = allTypes[$"{TableImporter.CodeNamespace}.{column.Format.Table.Name}"];
@@ -393,14 +399,9 @@ namespace Com.Pamcha.CodaSync {
         }
 
         private static string GetAssetPath (Type assetType, string assetName) {
-            AssetRef[] refs = assetRefs[assetType];
+            Dictionary<string, AssetRef> refs = assetRefs[assetType];
 
-            foreach (var asset in refs) {
-                if (asset.AssetName == assetName)
-                    return GetPathFromFilePath(asset.AssetPath);
-            }
-
-            return "Assets";
+            return GetPathFromFilePath(refs[assetName].AssetPath);
         }
 
         private static bool IsValidUrl(string url) {

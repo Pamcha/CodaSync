@@ -57,7 +57,7 @@ namespace Com.Pamcha.CodaSync {
 
             for (int i = 0; i < script.tableSelection.Count; i++) {
                 TableSelection selection = script.tableSelection[i];
-                if (ImporterExporter.TypeTables.Contains(selection.tableDescription.name))
+                if (selection.tableDescription.name == assetReferencesTableName)
                     continue;
 
                 EditorGUILayout.BeginHorizontal(listStyle);

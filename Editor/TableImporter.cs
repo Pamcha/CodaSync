@@ -31,7 +31,8 @@ namespace Com.Pamcha.CodaSync {
 
             if (EditorPrefs.GetBool(editorPrefKeyShouldCreateInstances, true)) {
                 EditorPrefs.SetBool(editorPrefKeyShouldCreateInstances, false);
-                CreateInstances();
+                TableStructure[] structures = JsonConvert.DeserializeObject<TableStructure[]>(EditorPrefs.GetString(editorPrefKeyTablesStructure));
+                GetTablesData(structures, CreateInstancesOnResponse);
             }
         }
 
@@ -52,7 +53,7 @@ namespace Com.Pamcha.CodaSync {
                 newTableSelection.Add(selection);
                 selection.tableDescription = tableList[i];
 
-                if (TypeTables.Contains(tableList[i].name))
+                if (tableList[i].name == assetReferencesTableName)
                     selection.selected = true;
                 else {
                     TableSelection prevSelection = tableSelection.Find(b => b.tableDescription.id == selection.tableDescription.id);
@@ -76,16 +77,24 @@ namespace Com.Pamcha.CodaSync {
             }
 
             EditorUtility.DisplayProgressBar("Coda Table Import", "Requesting tables structure", 0);
-            GetTablesStructure(tables, CreateScripts);
+
+            GetTablesStructure(tables, (structures) => {
+                GetTablesData(structures, CreateScriptOnResponse);
+            });
         }
 
-        private void CreateScripts(TableStructure[] tableList) {
+        private void CreateScriptOnResponse (UnityWebRequest[] requests, TableStructure[] structures) {
+            TableRow[][] rows = TableRowsFromRequestResult(requests);
+            CreateScripts(structures, rows);
+        }
+
+        private void CreateScripts(TableStructure[] tableList, TableRow[][] tableRows) {
             EditorUtility.DisplayProgressBar("Coda Table Import", "Generating code", .5f);
             CodeNamespace = codeNamespace;
-            CodeFiles[] codes = CodeGenerator.GetCodeFromTableStructures(tableList);
+            CodeFiles[] codes = CodeGenerator.GetCodeFromTableStructures(tableList, tableRows);
 
             for (int i = 0; i < tableList.Length; i++) {
-                if (TypeTables.Contains(tableList[i].UnmodifiedName))
+                if (tableList[i].UnmodifiedName == assetReferencesTableName)
                     continue;
                 CreateSourceFile($"{tableList[i].Name}_DB", codes[i].databaseCode);
                 CreateSourceFile(tableList[i].Name, codes[i].classCode);
@@ -100,8 +109,10 @@ namespace Com.Pamcha.CodaSync {
                 EditorPrefs.SetBool(editorPrefKeyShouldCreateInstances, true);
                 EditorUtility.DisplayProgressBar("Coda Table Import", "Waiting compilation", .6f);
                 CompilationPipeline.assemblyCompilationFinished += OnCompilation;
-            } else
-                CreateInstances();
+            } else {
+                TableStructure[] structures = JsonConvert.DeserializeObject<TableStructure[]>(EditorPrefs.GetString(editorPrefKeyTablesStructure));
+                GetTablesData(structures, CreateInstancesOnResponse);
+            }
         }
 
         private void CreateSourceFile(string filename, string code) {
@@ -117,18 +128,40 @@ namespace Com.Pamcha.CodaSync {
 
 
         #region TableData
-        private void CreateInstances() {
-            TableStructure[] structures = JsonConvert.DeserializeObject<TableStructure[]>(EditorPrefs.GetString(editorPrefKeyTablesStructure));
+        private void GetTablesData(TableStructure[] structures, System.Action<UnityWebRequest[], TableStructure[]> callback) {
+            if (structures == null) {
+                EditorUtility.ClearProgressBar();
+                return;
+            }
+
             string[] names = new string[structures.Length];
             EditorUtility.DisplayProgressBar("Coda Table Import", "Requesting tables data", .7f);
 
             for (int i = 0; i < structures.Length; i++) {
                 names[i] = structures[i].UnmodifiedName;
             }
-            requester.GetTablesData(documentId, names, (rqs) => OnTablesDataResponse(rqs, structures));
+            requester.GetTablesData(documentId, names, (rqs) => callback(rqs, structures));
         }
 
-        private void OnTablesDataResponse(UnityWebRequest[] dataRequests, TableStructure[] structures) {
+
+        private TableRow[][] TableRowsFromRequestResult (UnityWebRequest[] dataRequests) {
+            TableRow[][] tablesRows = new TableRow[dataRequests.Length][];
+
+            for (int i = 0; i < dataRequests.Length; i++) {
+                try {
+                    tablesRows[i] = JsonConvert.DeserializeObject<TableRowResponse>(dataRequests[i].downloadHandler.text).items;
+                } catch(JsonSerializationException exception) {
+                    EditorUtility.ClearProgressBar();
+                    Debug.LogError($"Non-parsable json received from Coda API : \n {dataRequests[i].downloadHandler.text}");
+                    throw (exception);
+                }
+            }
+
+            return tablesRows;
+        }
+
+
+        private void CreateInstancesOnResponse (UnityWebRequest[] dataRequests, TableStructure[] structures) {
             string basePath = GetPath();
             string instancesPath = $"{basePath}/Resources";
             CodeNamespace = codeNamespace;
@@ -136,14 +169,8 @@ namespace Com.Pamcha.CodaSync {
             if (!Directory.Exists(instancesPath))
                 Directory.CreateDirectory(instancesPath);
 
-            TableRow[][] tablesRows = new TableRow[dataRequests.Length][];
-
-            for (int i = 0; i < dataRequests.Length; i++) {
-                tablesRows[i] = JsonConvert.DeserializeObject<TableRowResponse>(dataRequests[i].downloadHandler.text).items;
-            }
-
             EditorUtility.DisplayProgressBar("Coda Table Import", "Requesting tables data", .85f);
-            InstanceGenerator.CreateAllInstances(structures, tablesRows, instancesPath);
+            InstanceGenerator.CreateAllInstances(structures, TableRowsFromRequestResult(dataRequests), instancesPath);
 
             AssetDatabase.Refresh();
 

@@ -17,17 +17,7 @@ namespace Com.Pamcha.CodaSync {
         [SerializeField, ReadOnly] public string lastSyncLocalDateString;
 
         protected bool docIdFound { get; private set; } = false;
-
-
-
-        public static readonly List<string> TypeTables = new List<string>{
-            "AudioClip",
-            "Sprite",
-            "Material",
-            "AnimatorController",
-            "Animation",
-            "GameObject"
-        };
+        public const string assetReferencesTableName = "AssetReferences";
 
         protected virtual void OnValidate() {
             documentId = GetDocumentIdFromURL();
@@ -37,11 +27,13 @@ namespace Com.Pamcha.CodaSync {
         public void GetTableList(Action<TableDescriptionData[]> callback) {
             if (!docIdFound) {
                 EditorUtility.DisplayDialog("Import setup", "Can't find documentID. Check your Coda document URL field", "OK");
+                EditorUtility.ClearProgressBar();
                 return;
             }
 
             if (requester == null) {
                 EditorUtility.DisplayDialog("Import setup", "No Requester setup", "OK");
+                EditorUtility.ClearProgressBar();
                 return;
             }
 
