@@ -97,7 +97,8 @@ namespace Com.Pamcha.CodaSync {
                 edit.rows[i].cells[2].value = assetRef.AssetPath;
                 edit.rows[i].cells[2].column = assetPathColumn.Value.Id;
 
-                edit.rows[i].cells[3].value = assets[i].GetType().ToString().Split('.')[1];
+                string[] typeSplit = assets[i].GetType().ToString().Split('.');
+                edit.rows[i].cells[3].value = typeSplit[typeSplit.Length-1];
                 edit.rows[i].cells[3].column = assetTypeColumn.Value.Id;
             }
 
