@@ -43,6 +43,12 @@ namespace Com.Pamcha.CodaSync {
 
         private void OnTableListResponse(UnityWebRequest req, Action<TableDescriptionData[]> callback) {
             string jsonString = req.downloadHandler.text;
+            if (string.IsNullOrEmpty(jsonString))
+            {
+                Debug.LogWarning("No json in table list response");
+                EditorUtility.ClearProgressBar();
+                return;
+            }
             callback(JsonConvert.DeserializeObject<TableListResponse>(jsonString).items);
         }
 
