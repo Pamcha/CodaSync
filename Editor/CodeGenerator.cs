@@ -1,20 +1,24 @@
+using UnityEngine;
+
 namespace Com.Pamcha.CodaSync {
     public abstract class CodeGenerator {
 
         private static TableStructure[] allStructures;
+        private static TableRow[][] allRows;
 
-        public static CodeFiles[] GetCodeFromTableStructures(TableStructure[] structures) {
+        public static CodeFiles[] GetCodeFromTableStructures(TableStructure[] structures, TableRow[][] tablesRows) {
             CodeFiles[] results = new CodeFiles[structures.Length];
             allStructures = structures;
+            allRows = tablesRows;
 
             for (int i = 0; i < structures.Length; i++) {
-                results[i] = GetCodeFromTableStructure(structures[i]);
+                results[i] = GetCodeFromTableStructure(structures[i], tablesRows[i]);
             }
 
             return results;
         }
 
-        private static CodeFiles GetCodeFromTableStructure(TableStructure structure) {
+        private static CodeFiles GetCodeFromTableStructure(TableStructure structure, TableRow[] rows) {
             string databaseCode =
 @$"using UnityEngine;
 using System.Collections.Generic;
@@ -39,7 +43,7 @@ namespace {TableImporter.CodeNamespace} {{
 using System.Collections.Generic;
 
 namespace {TableImporter.CodeNamespace} {{
-    public class {structure.Name} : ScriptableObject {{{GetFields(structure)}
+    public class {structure.Name} : ScriptableObject {{{GetFields(structure, rows)}
     }}
 }}";
 
@@ -56,14 +60,14 @@ namespace {TableImporter.CodeNamespace} {{
             return new CodeFiles(databaseCode, dataCode);
         }
 
-        private static string GetFields(TableStructure structure) {
+        private static string GetFields(TableStructure structure, TableRow[] rows) {
             string fields = "";
 
             foreach (var item in structure.Items) {
                 string type = "";
                 string attributes = "";
 
-                (attributes, type) = GetTypeOf(item);
+                (attributes, type) = GetTypeOf(item, rows);
 
                 if (item.Format.IsArray)
                     type = $"{type}[]";
@@ -101,15 +105,15 @@ namespace {TableImporter.CodeNamespace} {{
             return false;
         }
 
-        private static (string, string) GetTypeOf(TableColumn column) {
+        private static (string, string) GetTypeOf(TableColumn column, TableRow[] rows) {
             string type = "";
             string attributes = "";
             ColumnType columnType = column.Format.Type;
 
             switch (columnType) {
                 case ColumnType.canvas:
-                    type = "string";
                     attributes = "[TextArea]";
+                    type = "string";
                     break;
                 case ColumnType.text:
                 case ColumnType.select:
@@ -128,7 +132,10 @@ namespace {TableImporter.CodeNamespace} {{
                     type = "System.DateTime";
                     break;
                 case ColumnType.lookup:
-                    type = $"{column.Format.Table.Name}";
+                    if (column.Format.Table.Name != ImporterExporter.assetReferencesTableName)
+                        type = column.Format.Table.Name;
+                    else
+                        type = GetTypeFromFirstAssetReferenced(column, rows);
                     break;
                 default:
                     type = "object";
@@ -137,7 +144,67 @@ namespace {TableImporter.CodeNamespace} {{
 
             return (attributes, type);
         }
+
+        private static string GetTypeFromFirstAssetReferenced (TableColumn column, TableRow[] rows) {
+            for (int i = 0; i < rows.Length; i++)
+            {
+                string assetName = rows[i].Values[column.Id];
+
+                if (!string.IsNullOrEmpty(assetName))
+                    return GetReferencedAssetType(assetName);
+            }
+
+            return "object";
+        }
+
+        private static string GetColumnIdByName(TableStructure structure, string columnName) {
+            string columnId = "";
+
+            foreach (TableColumn columnStructure in structure.Items)
+            {
+                if (columnStructure.Name == columnName)
+                {
+                    columnId = columnStructure.Id;
+                    break;
+                }
+            }
+
+            return columnId;
+        }
+
+        private static string GetReferencedAssetType (string assetName) {
+            TableStructure? structure = null;
+            TableRow[] assetReferencesRows = null;
+
+            for (int i = 0; i < allStructures.Length; i++) {
+                if (allStructures[i].Name == ImporterExporter.assetReferencesTableName) {
+                    structure = allStructures[i];
+                    assetReferencesRows = allRows[i];
+                    break;
+                }
+            }
+
+            if (structure == null || assetReferencesRows == null) {
+                Debug.LogError($"Can't find table {ImporterExporter.assetReferencesTableName}");
+                return "object";
+            }
+
+            for (int i = 0; i < assetReferencesRows.Length; i++)
+            {
+                string name = assetReferencesRows[i].Values[GetColumnIdByName(structure.Value, "AssetName")];
+
+                if (assetName == name) {
+                    string assetType = assetReferencesRows[i].Values[GetColumnIdByName(structure.Value, "AssetType")];
+                    if (!string.IsNullOrEmpty(assetType))
+                        return assetType;
+                }
+            }
+
+            return "object";
+        }
     }
+
+
 
     public struct CodeFiles {
         public string databaseCode { get; private set; }

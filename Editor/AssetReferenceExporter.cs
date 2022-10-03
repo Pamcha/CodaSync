@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
+using UnityEditor.Animations;
 using UnityEngine;
 using UnityEngine.Networking;
 using static Com.Pamcha.CodaSync.CodaRequester;
@@ -11,6 +12,7 @@ namespace Com.Pamcha.CodaSync {
         [SerializeField] private string[] assetFolder;
         [SerializeField] private Object[] assets = new Object[0];
 
+        private const string assetListTableName = "AssetReferences";
 
         protected override void OnValidate() {
             base.OnValidate();
@@ -20,7 +22,27 @@ namespace Com.Pamcha.CodaSync {
 
         public void ExportReferences () {
             EditorUtility.DisplayProgressBar("Coda Table Import", "Fetching Table List", 0);
-            GetTableList((tables) => GetTablesStructure(tables.ToList(), OnTableListResponse));
+
+
+
+            GetTableList(OnTableListResponse);
+        }
+
+        private void OnTableListResponse (TableDescriptionData[] tables) {
+            TableDescriptionData? assetTable = null;
+
+            for (int i = 0; i < tables.Length; i++) {
+                if (tables[i].name == assetListTableName) {
+                    assetTable = tables[i];
+                    break;
+                }
+            }
+
+            if (assetTable == null) {
+                Debug.LogError($"Can't find table {assetListTableName}");
+                EditorUtility.ClearProgressBar();
+            } else 
+                GetTablesStructure(new List<TableDescriptionData>() { assetTable.Value }, OnTableListResponse);
         }
 
         public void AddFolder(string path) {
@@ -38,54 +60,46 @@ namespace Com.Pamcha.CodaSync {
             LoadAssets();
         }
 
-        private void OnTableListResponse(TableStructure[] tableList) {
-            EditorUtility.DisplayProgressBar("Coda Table Import", "Exporting Assets references", .5f);
-            for (int i = 0; i < tableList.Length; i++) {
-                if (TypeTables.Contains(tableList[i].Name)) {
-                    System.Type assetType;
-                    switch (tableList[i].Name) {
-                        case "AudioClip":
-                            assetType = typeof(AudioClip);
-                            break;
-                        case "Sprite":
-                            assetType = typeof(Sprite);
-                            break;
-                        case "Texture2D":
-                            assetType = typeof(Texture2D);
-                            break;
-                        default:
-                            assetType = typeof(Object);
-                            break;
-                    }
-
-                    //List<AssetRef> refs = GetRefs(assetType);
-                    //Debug.Log($"Got {refs.Count} asset of type {assetType}");
-                    ExportReferencesToTable(tableList[i], GetRefs(assetType));
-                }
+        private void OnTableListResponse(TableStructure[] tables)
+        {
+            if (tables.Length == 0) {
+                Debug.LogError($"No tables in API response");
+                return;
             }
+
+            ExportReferencesToTable(tables[0]);
         }
 
-        private void ExportReferencesToTable (TableStructure table, List<AssetRef> refs) {
+        private void ExportReferencesToTable(TableStructure table)
+        {
             RowEdit edit = new RowEdit();
 
             TableColumn? assetNameColumn = GetColumnByName(table, "AssetName");
             TableColumn? assetIdColumn = GetColumnByName(table, "AssetId");
             TableColumn? assetPathColumn = GetColumnByName(table, "AssetPath");
+            TableColumn? assetTypeColumn = GetColumnByName(table, "AssetType");
 
-            edit.rows = new Row[refs.Count];
-            edit.keyColumns = new[] { assetIdColumn.Value.Id };
+            edit.rows = new Row[assets.Length];
+            edit.keyColumns = new[] { assetPathColumn.Value.Id, assetTypeColumn.Value.Id };
 
-            for (int i = 0; i < refs.Count; i++) {
-                edit.rows[i].cells = new Cell[3];
+            for (int i = 0; i < assets.Length; i++)
+            {
+                AssetRef assetRef = new AssetRef(assets[i]);
 
-                edit.rows[i].cells[0].value = refs[i].AssetName;
+                edit.rows[i].cells = new Cell[4];
+
+                edit.rows[i].cells[0].value = assetRef.AssetName;
                 edit.rows[i].cells[0].column = assetNameColumn.Value.Id;
 
-                edit.rows[i].cells[1].value = refs[i].AssetId.ToString();
+                edit.rows[i].cells[1].value = assetRef.AssetId.ToString();
                 edit.rows[i].cells[1].column = assetIdColumn.Value.Id;
 
-                edit.rows[i].cells[2].value = refs[i].AssetPath;
+                edit.rows[i].cells[2].value = assetRef.AssetPath;
                 edit.rows[i].cells[2].column = assetPathColumn.Value.Id;
+
+                string[] typeSplit = assets[i].GetType().ToString().Split('.');
+                edit.rows[i].cells[3].value = typeSplit[typeSplit.Length-1];
+                edit.rows[i].cells[3].column = assetTypeColumn.Value.Id;
             }
 
             requester.SetTableRows(documentId, table.Name, edit, OnTableEditResponse);

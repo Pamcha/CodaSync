@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
@@ -17,6 +18,12 @@ namespace Com.Pamcha.CodaSync {
 
             Editor.DrawPropertiesExcluding(serializedObject, "assetFolder", "assets");
 
+            SerializedProperty date = serializedObject.FindProperty("lastSyncDateString");
+
+            if (string.IsNullOrEmpty(date.stringValue))
+                script.lastSyncLocalDateString = "Never";
+            else
+                script.lastSyncLocalDateString = $"{DateTime.Parse(date.stringValue).ToLocalTime():R}";
 
             EditorGUILayout.Space(30);
 
