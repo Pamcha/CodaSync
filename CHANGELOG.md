@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2024-03-21
+- Added slider colum type (treated as numbers in Unity)
 
 ## [1.0.0] - 2022-08-26
 ### Added

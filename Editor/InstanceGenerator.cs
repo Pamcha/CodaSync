@@ -250,7 +250,7 @@ namespace Com.Pamcha.CodaSync {
         }
 
         private bool DoClassExist(string fullClassname) {
-            // Liste de toutes les assembly du projet (je suis pas sûr de ce que c'est une assembly)
+            // Liste de toutes les assembly du projet (je suis pas sï¿½r de ce que c'est une assembly)
             Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
 
             for (int i = 0; i < assemblies.Length; i++) {
@@ -259,7 +259,7 @@ namespace Com.Pamcha.CodaSync {
 
                 for (int j = 0; j < types.Length; j++) {
 
-                    // Et là t'as trouvé ta classe
+                    // Et lï¿½ t'as trouvï¿½ ta classe
                     if (types[j].FullName == fullClassname)
                         return true;
                 }
@@ -276,6 +276,7 @@ namespace Com.Pamcha.CodaSync {
                 case ColumnType.canvas:
                     type = typeof(string);
                     break;
+                case ColumnType.slider:
                 case ColumnType.number:
                     type = typeof(float);
                     break;

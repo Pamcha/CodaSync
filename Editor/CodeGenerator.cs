@@ -115,6 +115,7 @@ namespace {TableImporter.CodeNamespace} {{
                 case ColumnType.select:
                     type = "string";
                     break;
+                case ColumnType.slider:
                 case ColumnType.number:
                     type = "float";
                     break;

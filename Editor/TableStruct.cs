@@ -68,6 +68,7 @@ namespace Com.Pamcha.CodaSync {
     public enum ColumnType {
         text,
         number,
+        slider,
         checkbox,
         date,
         canvas,
