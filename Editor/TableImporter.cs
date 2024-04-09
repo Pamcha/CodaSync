@@ -151,6 +151,8 @@ namespace Com.Pamcha.CodaSync {
             EditorUtility.ClearProgressBar();
 
             lastSyncDateString = $"{System.DateTime.UtcNow:R}";
+            lastSyncLocalDateString = lastSyncDateString;
+            EditorUtility.SetDirty(this);
         }
 
         #endregion

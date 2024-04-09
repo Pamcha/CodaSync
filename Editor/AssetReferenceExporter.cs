@@ -35,6 +35,8 @@ namespace Com.Pamcha.CodaSync {
 
             assetFolder = newFolders;
 
+            EditorUtility.SetDirty(this); // so that the folder list is saved
+
             LoadAssets();
         }
 
@@ -43,7 +45,8 @@ namespace Com.Pamcha.CodaSync {
             for (int i = 0; i < tableList.Length; i++) {
                 if (TypeTables.Contains(tableList[i].Name)) {
                     System.Type assetType;
-                    switch (tableList[i].Name) {
+                    switch (tableList[i].Name)
+                    {
                         case "AudioClip":
                             assetType = typeof(AudioClip);
                             break;
@@ -52,6 +55,9 @@ namespace Com.Pamcha.CodaSync {
                             break;
                         case "Texture2D":
                             assetType = typeof(Texture2D);
+                            break;
+                        case "GameObject":
+                            assetType = typeof(GameObject);
                             break;
                         default:
                             assetType = typeof(Object);
@@ -95,6 +101,10 @@ namespace Com.Pamcha.CodaSync {
             EditorUtility.ClearProgressBar();
 
             lastSyncDateString = $"{System.DateTime.UtcNow:R}";
+            lastSyncLocalDateString = lastSyncDateString;
+
+            //Debug.Log("last sync "+lastSyncDateString + " - " +lastSyncLocalDateString);
+            EditorUtility.SetDirty(this);
         }
 
         private List<AssetRef> GetRefs(System.Type type) {
@@ -137,7 +147,11 @@ namespace Com.Pamcha.CodaSync {
 
                 for (int i = 0; i < guids.Length; i++) {
                     string assetPath = AssetDatabase.GUIDToAssetPath(guids[i]);
-                    assets.AddRange(AssetDatabase.LoadAllAssetsAtPath(assetPath));
+                    //if asset is a game object we just add the main asset at path so we don't explore recursively the game object and export each one of its children
+                    if(AssetDatabase.LoadMainAssetAtPath(assetPath).GetType() == typeof(GameObject))
+                        assets.Add(AssetDatabase.LoadMainAssetAtPath(assetPath));
+                    else
+                        assets.AddRange(AssetDatabase.LoadAllAssetsAtPath(assetPath));
                 }
             }
             
