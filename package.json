@@ -1,6 +1,6 @@
 {
   "name"             : "com.pamcha.codasync",
-  "version"          : "1.0.2",
+  "version"          : "1.0.3",
   "displayName"      : "Coda Sync",
   "description"      : "An easy-to-use database system for your Unity Games based on Coda.io.\n With Coda Sync for Unity, you create and edit all your game’s data in a collaborative environment designed for teams!",
   "license": "MIT",

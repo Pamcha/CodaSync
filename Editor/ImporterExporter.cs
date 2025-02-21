@@ -55,7 +55,7 @@ namespace Com.Pamcha.CodaSync {
         }
 
 
-        public void GetTablesStructure(List<TableDescriptionData> tables, Action<TableStructure[]> response) {
+        public void GetTablesStructure(List<TableDescriptionData> tables, Action<TableStructure[]> response,  (string, string) visibleOnlyParam = default) {
             if (tables.Count == 0) {
                 EditorUtility.DisplayDialog("Table selection", "There is no table selected to import", "OK");
                 return;
@@ -67,7 +67,7 @@ namespace Com.Pamcha.CodaSync {
                 tablesName[i] = tables[i].name;
             }
 
-            requester.GetTablesStructure(documentId, tablesName, (req) => OnTableStructureResponse(req, tables.ToArray(), response));
+            requester.GetTablesStructure(documentId, tablesName, (req) => OnTableStructureResponse(req, tables.ToArray(), response), visibleOnlyParam);
         }
 
         private void OnTableStructureResponse(UnityWebRequest[] tableRequests, TableDescriptionData[] tableList, Action<TableStructure[]> callback) {

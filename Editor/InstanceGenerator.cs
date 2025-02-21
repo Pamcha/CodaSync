@@ -120,7 +120,6 @@ namespace Com.Pamcha.CodaSync {
             Type objectType = allTypes[$"{TableImporter.CodeNamespace}.{structure.Name}"];
 
             //Set Assets Fields
-
             for (int i = 0; i < rows.Length; i++) {
                 SetFields(structure, objectType, instances[i], rows[i].Values);
                 EditorUtility.SetDirty(instances[i]);
@@ -134,7 +133,7 @@ namespace Com.Pamcha.CodaSync {
             foreach (var key in fields.Keys) {
                 TableColumn? column = GetColumnById(structure, key);
                 if (column == null) {
-                    Debug.LogWarning($"Coda Sync : Can't find Column structure data for Column {key}");
+                    //Debug.LogWarning($"Coda Sync : Can't find Column structure data for Column {key}");
                     continue;
                 }
 

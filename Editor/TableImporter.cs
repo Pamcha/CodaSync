@@ -14,6 +14,9 @@ namespace Com.Pamcha.CodaSync {
 
         [Header("Code Generation")]
         [SerializeField] private string codeNamespace = "Com.DefaultCompany.Table";
+        
+        [SerializeField] private bool getVisibleColumnsOnly = true;
+        
         [HideInInspector] public List<TableSelection> tableSelection;
         public bool CanDisplayTableSelection { get => docIdFound && requester != null && tableSelection != null; }
 
@@ -76,7 +79,8 @@ namespace Com.Pamcha.CodaSync {
             }
 
             EditorUtility.DisplayProgressBar("Coda Table Import", "Requesting tables structure", 0);
-            GetTablesStructure(tables, CreateScripts);
+            (string, string) visibleOnlyParam = ("visibleOnly", getVisibleColumnsOnly.ToString());
+            GetTablesStructure(tables, CreateScripts,visibleOnlyParam);
         }
 
         private void CreateScripts(TableStructure[] tableList) {

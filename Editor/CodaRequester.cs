@@ -32,14 +32,16 @@ namespace Com.Pamcha.CodaSync {
             SendRequest(req, callback); // https://coda.io/apis/v1/docs/{documentId}/tables 
         }
 
-        public void GetTablesStructure(string documentId, string[] tablesIdOrName, System.Action<UnityWebRequest[]> callback) {
+        public void GetTablesStructure(string documentId, string[] tablesIdOrName, System.Action<UnityWebRequest[]> callback, (string, string) visibleOnlyParam = default) {
             UnityWebRequest[] reqs = new UnityWebRequest[tablesIdOrName.Length];
 
             for (int i = 0; i < reqs.Length; i++) {
                 reqs[i] = CreateBaseGetRequest();
                 AddRequestFields(reqs[i], "docs", documentId, "tables", tablesIdOrName[i], "columns");
+                if(visibleOnlyParam != default)
+                    AddQueryParameters(reqs[i],visibleOnlyParam);
             }
-
+            //Debug.Log(reqs.url);
             SendRequests(reqs, callback); // https://coda.io/apis/v1/docs/{documentId}/tables/{tableIdOrName}/columns
         }
 
@@ -51,7 +53,7 @@ namespace Com.Pamcha.CodaSync {
                 AddRequestFields(reqs[i], "docs", documentId, "tables", tablesIdOrName[i], "rows");
             }
 
-            SendRequests(reqs, callback); // https://coda.io/apis/v1/docs/{documentId}/tables/{tableIdOrName}/columns
+            SendRequests(reqs, callback); // https://coda.io/apis/v1/docs/{documentId}/tables/{tableIdOrName}/rows
         }
         #endregion
 
@@ -84,7 +86,7 @@ namespace Com.Pamcha.CodaSync {
             return req;
         }
         private UnityWebRequest CreateBasePostRequest(string data) {
-            UnityWebRequest req = UnityWebRequest.Post(_apiBasePath, "");
+            UnityWebRequest req = UnityWebRequest.PostWwwForm(_apiBasePath, "");
             req.SetRequestHeader("Authorization", $"Bearer {_apiToken}");
 
             req.uploadHandler = new UploadHandlerRaw(UTF8.GetBytes(data)) {
@@ -98,6 +100,15 @@ namespace Com.Pamcha.CodaSync {
             foreach (var field in fields) {
                 req.url = $"{req.url}/{field}";
             }
+        }
+
+        private void AddQueryParameters(UnityWebRequest req, params (string Key, string Value)[] pairs) {
+             req.url = $"{req.url}?";
+             for (int i = 0; i < pairs.Length; i++)
+             {
+                //(string Key, string Value) pair = pairs[i];
+                req.url = $"{req.url}{pairs[i].Key}={pairs[i].Value}";
+             }
         }
 
         private void SendRequest(UnityWebRequest req, System.Action<UnityWebRequest> callback) {

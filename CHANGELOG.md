@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.03] - 2025-02-21
+### Added
+- The table importer now has a Get visible colums only field: when checked, the columns that are hidden in coda are removed from the generated Scriptable objects. This allow you to have coda docs with working tables that contain columns (e.g. for testing purpose inside coda) that are not used in Unity
+- Game objects can be saved in a Game Object table
+
+
 ## [1.0.2] - 2024-04-09
 ### Fixed
 - Last update date is saved and displayed
