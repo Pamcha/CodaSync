@@ -24,7 +24,7 @@ namespace {TableImporter.CodeNamespace} {{
         public static {structure.Name}_DB Instance {{
             get {{
                 if (_instance == null)
-                    _instance = Resources.Load<{structure.Name}_DB>(typeof({structure.Name}_DB).Name);
+                    _instance = Resources.Load<{structure.Name}_DB>({"\""+structure.Name+"/_"+structure.Name+"_Database\""});
                 return _instance;
             }}
         }}

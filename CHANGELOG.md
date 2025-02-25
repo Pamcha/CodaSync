@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.4] - 2025-02-25
+### Fixed
+- The database class static instance was not found through ressource.load due to a wrong path configuration in the generated DB class. You can now use the database class (i.e. the class that has a list to all instances of a class, for example if you have a character table, you will have a Character class with a scriptable object per row and a Character_DB class wit a scriptable objects that has a list with a reference to all the Character scriptable objects)
+
 ## [1.03] - 2025-02-21
 ### Added
 - The table importer now has a Get visible colums only field: when checked, the columns that are hidden in coda are removed from the generated Scriptable objects. This allow you to have coda docs with working tables that contain columns (e.g. for testing purpose inside coda) that are not used in Unity
