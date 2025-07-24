@@ -385,7 +385,9 @@ namespace Com.Pamcha.CodaSync {
                 string assetPath = AssetDatabase.GUIDToAssetPath(resultGUIDS[i]);
                 dynamic asset = AssetDatabase.LoadAssetAtPath(assetPath, assetType);
 
-                if (asset != null)
+                string normalizedExpected = assetName.Replace(" ", "_");
+                // Only return it if the asset name is an exact match
+                if (asset != null && asset.name == normalizedExpected)
                     return asset;
             }
 
