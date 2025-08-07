@@ -50,6 +50,9 @@ namespace Com.Pamcha.CodaSync {
             if (GUILayout.Button("Export Assets References"))
                 script.ExportReferences();
 
+             if (GUILayout.Button("Check for Duplicate Asset Paths"))
+                script.CheckForDuplicateAssetPaths(); 
+
             serializedObject.ApplyModifiedProperties();
         }
 
