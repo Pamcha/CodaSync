@@ -71,7 +71,8 @@ namespace Com.Pamcha.CodaSync {
             }
         }
 
-        private void ExportReferencesToTable (TableStructure table, List<AssetRef> refs) {
+        private void ExportReferencesToTable(TableStructure table, List<AssetRef> refs)
+        {
             RowEdit edit = new RowEdit();
 
             TableColumn? assetNameColumn = GetColumnByName(table, "AssetName");
@@ -79,15 +80,16 @@ namespace Com.Pamcha.CodaSync {
             TableColumn? assetPathColumn = GetColumnByName(table, "AssetPath");
 
             edit.rows = new Row[refs.Count];
-            edit.keyColumns = new[] { assetIdColumn.Value.Id };
+            edit.keyColumns = new[] { assetPathColumn.Value.Id }; // ✅ Use AssetPath as key
 
-            for (int i = 0; i < refs.Count; i++) {
+            for (int i = 0; i < refs.Count; i++)
+            {
                 edit.rows[i].cells = new Cell[3];
 
                 edit.rows[i].cells[0].value = refs[i].AssetName;
                 edit.rows[i].cells[0].column = assetNameColumn.Value.Id;
 
-                edit.rows[i].cells[1].value = refs[i].AssetId.ToString();
+                edit.rows[i].cells[1].value = refs[i].AssetId.ToString(); // Still included, but not the key
                 edit.rows[i].cells[1].column = assetIdColumn.Value.Id;
 
                 edit.rows[i].cells[2].value = refs[i].AssetPath;
@@ -97,7 +99,44 @@ namespace Com.Pamcha.CodaSync {
             requester.SetTableRows(documentId, table.Name, edit, OnTableEditResponse);
         }
 
-        private void OnTableEditResponse(UnityWebRequest req) {
+        public void CheckForDuplicateAssetPaths()
+        {
+        #if UNITY_EDITOR
+            var paths = new Dictionary<string, Object>();
+            var duplicates = new List<string>();
+
+            foreach (var asset in assets)
+            {
+                if (asset == null) continue;
+
+                string path = AssetDatabase.GetAssetPath(asset);
+                if (paths.ContainsKey(path))
+                {
+                    duplicates.Add(path);
+                }
+                else
+                {
+                    paths[path] = asset;
+                }
+            }
+
+            if (duplicates.Count == 0)
+            {
+                Debug.Log("✅ No duplicate asset paths found.");
+            }
+            else
+            {
+                Debug.LogWarning($"⚠️ Found {duplicates.Count} duplicate asset path(s):");
+                foreach (var dup in duplicates)
+                {
+                    Debug.LogWarning($"Duplicate: {dup}");
+                }
+            }
+        #endif
+        }
+
+        private void OnTableEditResponse(UnityWebRequest req)
+        {
             EditorUtility.ClearProgressBar();
 
             lastSyncDateString = $"{System.DateTime.UtcNow:R}";

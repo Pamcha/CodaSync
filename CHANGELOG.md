@@ -6,7 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.0.4] - 2025-07-24
+## [1.0.6] - 2025-08-07
+### Fixed
+- The asset exporter references tables are now based on the asset path and not the assetID because these might change in rare occasions, making them less trustable. The id is still kept in the table and will be updated if it has been modified in Unity for some reason. The goal is to prevent duplication in these asset ref tables
+- The instance generator now uses asset path and not asset Id to retrieve the asset. The asset id method is kept as a fallback for backward compatibility
+
+## [1.0.5] - 2025-07-24
 ### Fixed
 - Fixed a bug where ScriptableObject references between tables (e.g., relation columns) could point to incorrect assets when row names were similar (e.g., "item hero 2" vs "item 2 hero").
 - The internal asset name normalization (e.g., replacing spaces with underscores) is now accounted for when resolving references, ensuring accurate linking between generated ScriptableObjects.

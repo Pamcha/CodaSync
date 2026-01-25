@@ -16,7 +16,6 @@ namespace Com.Pamcha.CodaSync {
 
         private static Dictionary<string, Type> allTypes;
         private static string basePath;
-
         private static Dictionary<Type, AssetRef[]> assetRefs = new Dictionary<Type, AssetRef[]>();
 
         public static void CreateAllInstances(TableStructure[] structures, TableRow[][] tablesRows, string path) {
@@ -36,7 +35,6 @@ namespace Com.Pamcha.CodaSync {
                 instances[structures[i]] = CreateInstances(structures[i], tablesRows[i], instancePath);
             }
 
-
             for (int i = 0; i < structures.Length; i++) {
                 if (ImporterExporter.TypeTables.Contains(structures[i].UnmodifiedName))
                     continue;
@@ -45,8 +43,8 @@ namespace Com.Pamcha.CodaSync {
             }
         }
 
-        #region AssetsLoading
-        private static void LoadAssetRefs (TableStructure[] structures, TableRow[][] tablesRows) {
+        #region Assets Loading
+        private static void LoadAssetRefs(TableStructure[] structures, TableRow[][] tablesRows) {
             assetRefs.Clear();
 
             for (int i = 0; i < structures.Length; i++) {
@@ -62,6 +60,7 @@ namespace Com.Pamcha.CodaSync {
             AssetRef[] refs = new AssetRef[rows.Length];
 
             for (int i = 0; i < rows.Length; i++) {
+                // Keep AssetId parsing for backward compatibility, but AssetPath is now the primary key
                 string assetIdString = rows[i].Values[GetColumnIdByName(structure, "AssetId")];
                 bool success = int.TryParse(assetIdString, out int assetId);
 
@@ -81,7 +80,7 @@ namespace Com.Pamcha.CodaSync {
         }
         #endregion
 
-        #region InstancesCreation
+        #region Instance Creation
         private static dynamic[] CreateInstances(TableStructure structure, TableRow[] rows, string path) {
             ScriptableObject database = ScriptableObject.CreateInstance($"{structure.Name}_DB");
             AssetDatabase.CreateAsset(database, $"{path}/_{structure.Name}_Database.asset");
@@ -92,10 +91,9 @@ namespace Com.Pamcha.CodaSync {
             Type listType = typeof(List<>).MakeGenericType(objectType);
             dynamic instanceList = Activator.CreateInstance(listType);
 
-            //Create Assets
+            // Create Assets
             dynamic[] instances = new dynamic[rows.Length];
             for (int i = 0; i < rows.Length; i++) {
-
                 string assetPath = $"{path}/{rows[i].Name}.asset";
                 instances[i] = AssetDatabase.LoadAssetAtPath(assetPath, objectType);
 
@@ -119,7 +117,7 @@ namespace Com.Pamcha.CodaSync {
         private static void SetAllFields(TableStructure structure, dynamic[] instances, TableRow[] rows) {
             Type objectType = allTypes[$"{TableImporter.CodeNamespace}.{structure.Name}"];
 
-            //Set Assets Fields
+            // Set Asset Fields
             for (int i = 0; i < rows.Length; i++) {
                 SetFields(structure, objectType, instances[i], rows[i].Values);
                 EditorUtility.SetDirty(instances[i]);
@@ -128,22 +126,18 @@ namespace Com.Pamcha.CodaSync {
         }
 
         private static void SetFields(TableStructure structure, Type instanceType, dynamic instance, Dictionary<string, string> fields) {
-            FieldInfo instanceField;
-
             foreach (var key in fields.Keys) {
                 TableColumn? column = GetColumnById(structure, key);
                 if (column == null) {
-                    //Debug.LogWarning($"Coda Sync : Can't find Column structure data for Column {key}");
                     continue;
                 }
 
-                instanceField = instanceType.GetField(column.Value.Name, BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                FieldInfo instanceField = instanceType.GetField(column.Value.Name, BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
 
                 if (!column.Value.Format.IsArray)
                     SetFieldSimpleValue(column.Value, instance, instanceField, fields[key]);
-                else {
+                else
                     SetFieldArray(column.Value, instance, instanceField, fields[key]);
-                }
             }
         }
 
@@ -186,194 +180,58 @@ namespace Com.Pamcha.CodaSync {
                     field.SetValue(instance, IsFieldEmpty(value) ? default : list.ToArray());
                     break;
                 case ColumnType.image:
-
+                    // TODO: Implement image array handling if needed
                     break;
                 default:
                     field.SetValue(instance, IsFieldEmpty(value) ? default : splitValue);
                     break;
             }
         }
-
-        private static Sprite CreateSpriteAsset(Texture2D texture, string assetName) {
-            string assetPath = $"{basePath}/Images/{assetName}.png";
-
-            if (!Directory.Exists($"{basePath}/Images"))
-                Directory.CreateDirectory($"{basePath}/Images");
-
-            Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>(assetPath);
-
-            if (sprite == null) {
-                File.WriteAllBytes(assetPath, texture.EncodeToPNG());
-                AssetDatabase.Refresh();
-                sprite = AssetDatabase.LoadAssetAtPath<Sprite>(assetPath);
-            }
-
-            return sprite;
-        }
-
-        private static IEnumerator LoadImage(string url, Action<Texture2D> callback) {
-            UnityWebRequest req = UnityWebRequestTexture.GetTexture(url);
-
-            Debug.Log($"Requesting Image {url}");
-
-            yield return req.SendWebRequest();
-
-
-            Debug.Log($"Result for {url} : {req.result}");
-
-            if (req.result == UnityWebRequest.Result.Success)
-                callback(((DownloadHandlerTexture)req.downloadHandler).texture);
-            else
-                callback(null);
-        }
         #endregion
 
-        #region UTILS
-        private static bool IsFieldEmpty(object fieldValue) {
-            return fieldValue.GetType() == typeof(string) && string.IsNullOrEmpty((string)fieldValue);
-        }
-
-
-        private static Dictionary<string, Type> GetAllTypes() {
-            Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
-            Dictionary<string, Type> allTypes = new Dictionary<string, Type>();
-
-            foreach (var assembly in assemblies) {
-                Type[] types = assembly.GetTypes();
-                foreach (var type in types) {
-                    allTypes[type.FullName] = type;
-                }
-            }
-
-            return allTypes;
-        }
-
-        private bool DoClassExist(string fullClassname) {
-            // Liste de toutes les assembly du projet (je suis pas s�r de ce que c'est une assembly)
-            Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
-
-            for (int i = 0; i < assemblies.Length; i++) {
-                // Liste de toutes les types de ton projet
-                Type[] types = assemblies[i].GetTypes();
-
-                for (int j = 0; j < types.Length; j++) {
-
-                    // Et l� t'as trouv� ta classe
-                    if (types[j].FullName == fullClassname)
-                        return true;
-                }
-            }
-
-            return false;
-        }
-        private static Type GetType(TableColumn column) {
-            Type type = null;
-            ColumnType columnType = column.Format.Type;
-
-            switch (columnType) {
-                case ColumnType.text:
-                case ColumnType.canvas:
-                    type = typeof(string);
-                    break;
-                case ColumnType.slider:
-                case ColumnType.number:
-                    type = typeof(float);
-                    break;
-                case ColumnType.checkbox:
-                    type = typeof(bool);
-                    break;
-                case ColumnType.image:
-                    type = typeof(Sprite);
-                    break;
-                case ColumnType.date:
-                    type = typeof(DateTime);
-                    break;
-                case ColumnType.lookup:
-                    if (ImporterExporter.TypeTables.Contains(column.Format.Table.Name))
-                        type = GetAssetType(column.Format.Table.Name);
-                    else
-                        type = allTypes[$"{TableImporter.CodeNamespace}.{column.Format.Table.Name}"];
-                    break;
-                default:
-                    type = typeof(object);
-                    break;
-            }
-
-            return type;
-        }
-
-        private static Type GetAssetType (string typeName) {
-            switch (typeName) {
-                case "AudioClip":
-                    return typeof(AudioClip);
-                case "Texture2D":
-                    return typeof(Texture2D);
-                case "Sprite":
-                    return typeof(Sprite);
-                case "Material":
-                    return typeof(Material);
-                case "AnimatorController":
-                    return typeof(AnimatorController);
-                case "Animation":
-                    return typeof(Animation);
-                default:
-                    return typeof(UnityEngine.Object);
-            }
-        }
-
-        private static string GetFileNameFromURL(string url) {
-            Regex rx = new Regex(@"[^\/\\&\?]+\.\w{3,4}(?=([\?&].*$|$))");
-
-            MatchCollection matches = rx.Matches(url);
-
-
-            if (matches.Count == 0)
-                return "";
-            else {
-                return matches[0].Value.Split('.')[0];
-            }
-        }
-
-        private static string GetPathFromFilePath (string filepath) {
-            Regex rx = new Regex(@"^(.+)\/([^\/]+)$");
-
-            MatchCollection matches = rx.Matches(filepath);
-
-            if (matches.Count == 0)
-                return "";
-            else {
-                return matches[0].Groups[1].Value;
-            }
-        }
-
-        private static TableColumn? GetColumnById(TableStructure structure, string columnId) {
-            TableColumn? column = null;
-
-            foreach (TableColumn columnStructure in structure.Items) {
-                if (columnStructure.Id == columnId) {
-                    column = columnStructure;
-                    break;
-                }
-            }
-
-            return column;
-        }
-
-        private static string GetColumnIdByName (TableStructure structure, string columnName) {
-            string columnId = "";
-
-            foreach (TableColumn columnStructure in structure.Items) {
-                if (columnStructure.Name == columnName) {
-                    columnId = columnStructure.Id;
-                    break;
-                }
-            }
-
-            return columnId;
-        }
-
+        #region Asset Resolution
+        /// <summary>
+        /// Main method to find assets - now uses AssetPath as primary resolution method
+        /// </summary>
         private static dynamic FindAssetByTypeAndName(Type assetType, string assetName) {
-            string[] searchParam = assetRefs.ContainsKey(assetType) ? new[] { GetAssetPath(assetType, assetName) } : new[] { "Assets" };
+            // Try path-based resolution first (faster and more reliable)
+            dynamic asset = FindAssetByPath(assetType, assetName);
+            if (asset != null) return asset;
+
+            // Fallback to search-based resolution for compatibility
+            return FindAssetBySearch(assetType, assetName);
+        }
+
+        /// <summary>
+        /// Direct path-based asset resolution using exported asset references
+        /// </summary>
+        private static dynamic FindAssetByPath(Type assetType, string assetName) {
+            if (!assetRefs.ContainsKey(assetType)) return null;
+
+            AssetRef[] refs = assetRefs[assetType];
+            foreach (var assetRef in refs) {
+                if (assetRef.AssetName == assetName) {
+                    if (!string.IsNullOrEmpty(assetRef.AssetPath)) {
+                        dynamic asset = AssetDatabase.LoadAssetAtPath(assetRef.AssetPath, assetType);
+                        if (asset != null) {
+                            return asset;
+                        } else {
+                            Debug.LogWarning($"Coda Sync : Asset not found at path: {assetRef.AssetPath} for asset {assetName}");
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Search-based asset resolution (fallback for non-exported assets and SO relations)
+        /// </summary>
+        private static dynamic FindAssetBySearch(Type assetType, string assetName) {
+            string[] searchParam = assetRefs.ContainsKey(assetType) ?
+                new[] { GetAssetDirectoryPath(assetType, assetName) } :
+                new[] { "Assets" };
+
             string searchString = $"{assetName} t:{assetType.FullName}";
             searchString = searchString.Replace("UnityEngine.", "");
 
@@ -399,20 +257,167 @@ namespace Com.Pamcha.CodaSync {
             return null;
         }
 
-        private static string GetAssetPath (Type assetType, string assetName) {
+        /// <summary>
+        /// Get directory path for search fallback
+        /// </summary>
+        private static string GetAssetDirectoryPath(Type assetType, string assetName) {
+            if (!assetRefs.ContainsKey(assetType)) return "Assets";
+            
             AssetRef[] refs = assetRefs[assetType];
-
             foreach (var asset in refs) {
                 if (asset.AssetName == assetName)
                     return GetPathFromFilePath(asset.AssetPath);
             }
-
             return "Assets";
+        }
+        #endregion
+
+        #region Image Handling
+        private static Sprite CreateSpriteAsset(Texture2D texture, string assetName) {
+            string assetPath = $"{basePath}/Images/{assetName}.png";
+
+            if (!Directory.Exists($"{basePath}/Images"))
+                Directory.CreateDirectory($"{basePath}/Images");
+
+            Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>(assetPath);
+
+            if (sprite == null) {
+                File.WriteAllBytes(assetPath, texture.EncodeToPNG());
+                AssetDatabase.Refresh();
+                sprite = AssetDatabase.LoadAssetAtPath<Sprite>(assetPath);
+            }
+
+            return sprite;
+        }
+
+        private static IEnumerator LoadImage(string url, Action<Texture2D> callback) {
+            UnityWebRequest req = UnityWebRequestTexture.GetTexture(url);
+            Debug.Log($"Requesting Image {url}");
+            yield return req.SendWebRequest();
+            Debug.Log($"Result for {url} : {req.result}");
+
+            if (req.result == UnityWebRequest.Result.Success)
+                callback(((DownloadHandlerTexture)req.downloadHandler).texture);
+            else
+                callback(null);
+        }
+        #endregion
+
+        #region Utility Methods
+        private static bool IsFieldEmpty(object fieldValue) {
+            return fieldValue.GetType() == typeof(string) && string.IsNullOrEmpty((string)fieldValue);
+        }
+
+        private static Dictionary<string, Type> GetAllTypes() {
+            Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            Dictionary<string, Type> allTypes = new Dictionary<string, Type>();
+
+            foreach (var assembly in assemblies) {
+                Type[] types = assembly.GetTypes();
+                foreach (var type in types) {
+                    allTypes[type.FullName] = type;
+                }
+            }
+
+            return allTypes;
+        }
+
+        private static Type GetType(TableColumn column) {
+            ColumnType columnType = column.Format.Type;
+
+            switch (columnType) {
+                case ColumnType.text:
+                case ColumnType.canvas:
+                    return typeof(string);
+                case ColumnType.slider:
+                case ColumnType.number:
+                    return typeof(float);
+                case ColumnType.checkbox:
+                    return typeof(bool);
+                case ColumnType.image:
+                    return typeof(Sprite);
+                case ColumnType.date:
+                    return typeof(DateTime);
+                case ColumnType.lookup:
+                    if (ImporterExporter.TypeTables.Contains(column.Format.Table.Name))
+                        return GetAssetType(column.Format.Table.Name);
+                    else
+                        return allTypes[$"{TableImporter.CodeNamespace}.{column.Format.Table.Name}"];
+                default:
+                    return typeof(object);
+            }
+        }
+
+        private static Type GetAssetType(string typeName) {
+            switch (typeName) {
+                case "AudioClip":
+                    return typeof(AudioClip);
+                case "Texture2D":
+                    return typeof(Texture2D);
+                case "Sprite":
+                    return typeof(Sprite);
+                case "Material":
+                    return typeof(Material);
+                case "AnimatorController":
+                    return typeof(AnimatorController);
+                case "Animation":
+                    return typeof(Animation);
+                default:
+                    return typeof(UnityEngine.Object);
+            }
+        }
+
+        private static string GetFileNameFromURL(string url) {
+            Regex rx = new Regex(@"[^\/\\&\?]+\.\w{3,4}(?=([\?&].*$|$))");
+            MatchCollection matches = rx.Matches(url);
+            return matches.Count == 0 ? "" : matches[0].Value.Split('.')[0];
+        }
+
+        private static string GetPathFromFilePath(string filepath) {
+            Regex rx = new Regex(@"^(.+)\/([^\/]+)$");
+            MatchCollection matches = rx.Matches(filepath);
+            return matches.Count == 0 ? "" : matches[0].Groups[1].Value;
+        }
+
+        private static TableColumn? GetColumnById(TableStructure structure, string columnId) {
+            foreach (TableColumn columnStructure in structure.Items) {
+                if (columnStructure.Id == columnId) {
+                    return columnStructure;
+                }
+            }
+            return null;
+        }
+
+        private static string GetColumnIdByName(TableStructure structure, string columnName) {
+            foreach (TableColumn columnStructure in structure.Items) {
+                if (columnStructure.Name == columnName) {
+                    return columnStructure.Id;
+                }
+            }
+            return "";
         }
 
         private static bool IsValidUrl(string url) {
             return Uri.TryCreate(url, UriKind.Absolute, out Uri _);
         }
+
+        // OPTIONAL: Uncomment for debugging asset resolution
+        /*
+        private static void LogAssetResolutionInfo(Type assetType, string assetName) {
+            Debug.Log($"Coda Sync Debug: Resolving {assetType.Name} with name '{assetName}'");
+            
+            if (assetRefs.ContainsKey(assetType)) {
+                AssetRef[] refs = assetRefs[assetType];
+                Debug.Log($"Found {refs.Length} asset references for type {assetType.Name}");
+                
+                foreach (var assetRef in refs) {
+                    Debug.Log($"- Asset: {assetRef.AssetName}, Path: {assetRef.AssetPath}");
+                }
+            } else {
+                Debug.Log($"No asset references found for type {assetType.Name}");
+            }
+        }
+        */
         #endregion
     }
 }
