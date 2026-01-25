@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-01-25
+### Fixed
+- Fixed a bug where ScriptableObject lookup references would fail to resolve when the referenced SO class has a field named `name` that shadows `UnityEngine.Object.name`. The asset search now correctly extracts the actual asset filename for comparison, handling cases where the field value contains path-like strings (e.g., « Category/assetName" instead of "assetName").
+
 ## [1.0.6] - 2025-08-07
 ### Fixed
 - The asset exporter references tables are now based on the asset path and not the assetID because these might change in rare occasions, making them less trustable. The id is still kept in the table and will be updated if it has been modified in Unity for some reason. The goal is to prevent duplication in these asset ref tables
