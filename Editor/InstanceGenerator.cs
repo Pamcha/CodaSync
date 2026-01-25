@@ -377,8 +377,6 @@ namespace Com.Pamcha.CodaSync {
             string searchString = $"{assetName} t:{assetType.FullName}";
             searchString = searchString.Replace("UnityEngine.", "");
 
-            //Debug.Log(searchParam[0]);
-
             string[] resultGUIDS = AssetDatabase.FindAssets(searchString, searchParam);
 
             for (int i = 0; i < resultGUIDS.Length; i++) {
@@ -386,8 +384,15 @@ namespace Com.Pamcha.CodaSync {
                 dynamic asset = AssetDatabase.LoadAssetAtPath(assetPath, assetType);
 
                 string normalizedExpected = assetName.Replace(" ", "_");
-                // Only return it if the asset name is an exact match
-                if (asset != null && asset.name == normalizedExpected)
+
+                // Extract just the filename from asset.name
+                // (handles case where SO has a 'name' field that shadows UnityEngine.Object.name)
+                string actualAssetName = asset?.name ?? "";
+                if (actualAssetName.Contains("/")) {
+                    actualAssetName = actualAssetName.Substring(actualAssetName.LastIndexOf('/') + 1);
+                }
+
+                if (asset != null && actualAssetName == normalizedExpected)
                     return asset;
             }
 
