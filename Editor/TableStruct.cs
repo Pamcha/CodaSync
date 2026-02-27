@@ -91,6 +91,7 @@ namespace Com.Pamcha.CodaSync {
 
         public string Id { get => id; }
         public string Name { get => string.IsNullOrEmpty(name) ? "" : name.Trim().Replace(' ', '_').Replace('-', '_'); }
+        public string UnmodifiedName { get => name; }
         public Dictionary<string, string> Values { get => values; }
     }
     #endregion

@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-02-27
+### Added
+- **Validate Names button** in Table Importer inspector — checks table, column, and row names for invalid C# identifiers and reports issues in the console
+- **Duplicate row name detection** — duplicates are flagged as critical (red) in the validation report and skipped during import to prevent asset overwrites and broken lookups
+- **Auto-validation during import** — name issues are logged automatically before code generation
+- **Cancelable progress bar** on import and validation operations — click Cancel to abort cleanly at any step
+- **Meaningful progress bar** — displays current table name, step description, and real progress percentage
+- Rich text console output with color-coded messages and emojis (⚠️ warnings in orange, ❌ errors in red, ✅ success in green)
+
+### Improved
+- Table Importer editor UX: alphabetical table list, selection counter, zebra striping, prominent Import button, icons on buttons
+- Empty display column rows are now skipped during import with a clear warning
+- `AssetDatabase.SaveAssets()` between instance creation and field assignment passes for reliable SO-to-SO lookup resolution
+
+### Fixed
+- Rows with invalid file name characters (`* ? < > : " | / \`) are now detected and skipped during import instead of crashing Unity
+- Cleaned up debug logging in `InstanceGenerator` — consistent `[CodaSync]` prefix, no more noisy image request logs, errors only logged on failure
+
 ## [1.0.7] - 2026-01-25
 ### Fixed
 - Fixed a bug where ScriptableObject lookup references would fail to resolve when the referenced SO class has a field named `name` that shadows `UnityEngine.Object.name`. The asset search now correctly extracts the actual asset filename for comparison, handling cases where the field value contains path-like strings (e.g., « Category/assetName" instead of "assetName").

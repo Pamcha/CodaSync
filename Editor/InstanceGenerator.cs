@@ -35,6 +35,12 @@ namespace Com.Pamcha.CodaSync {
                 instances[structures[i]] = CreateInstances(structures[i], tablesRows[i], instancePath);
             }
 
+            // Flush all newly created assets to disk before resolving lookups in pass 2.
+            // No AssetDatabase.Refresh() needed here: assets created via CreateAsset are already
+            // indexed in memory, so FindAssets can resolve them. Refresh() would only be needed
+            // for files written directly to disk (e.g. File.WriteAllText), and is slow on large projects.
+            AssetDatabase.SaveAssets();
+
             for (int i = 0; i < structures.Length; i++) {
                 if (ImporterExporter.TypeTables.Contains(structures[i].UnmodifiedName))
                     continue;
@@ -65,7 +71,7 @@ namespace Com.Pamcha.CodaSync {
                 bool success = int.TryParse(assetIdString, out int assetId);
 
                 if (!success) {
-                    Debug.LogWarning($"Coda Sync : Asset {rows[i].Values[GetColumnIdByName(structure, "AssetName")]} can't be referenced, invalid assetId, check your AssetReferences in Coda");
+                    Debug.Log($"<color=#E8A838>\u26a0\ufe0f <b>[CodaSync]</b> Asset \"{rows[i].Values[GetColumnIdByName(structure, "AssetName")]}\" can't be referenced (invalid AssetId). Check your AssetReferences in Coda.</color>");
                     continue;
                 }
 
@@ -91,9 +97,28 @@ namespace Com.Pamcha.CodaSync {
             Type listType = typeof(List<>).MakeGenericType(objectType);
             dynamic instanceList = Activator.CreateInstance(listType);
 
+            // Track seen names to skip duplicates (duplicates cause asset overwrites and broken lookups)
+            HashSet<string> seenNames = new HashSet<string>();
+
             // Create Assets
             dynamic[] instances = new dynamic[rows.Length];
             for (int i = 0; i < rows.Length; i++) {
+                if (string.IsNullOrWhiteSpace(rows[i].Name)) {
+                    Debug.Log($"<color=#E8A838>\u26a0\ufe0f <b>[CodaSync]</b> Table \"{structure.UnmodifiedName}\" \u2192 row #{i + 1} has an <b>empty display column</b>. This row will be skipped.</color>");
+                    continue;
+                }
+
+                if (!seenNames.Add(rows[i].Name)) {
+                    Debug.Log($"<color=#E85B5B>\u274c <b>[CodaSync]</b> Table \"{structure.UnmodifiedName}\" \u2192 row #{i + 1} \"{rows[i].UnmodifiedName}\" is a <b>duplicate name</b> (resolves to \"{rows[i].Name}\"). Skipped to avoid asset overwrite.</color>");
+                    continue;
+                }
+
+                char? invalidChar = GetInvalidFileNameChar(rows[i].Name);
+                if (invalidChar != null) {
+                    Debug.Log($"<color=#E85B5B>\u274c <b>[CodaSync]</b> Table \"{structure.UnmodifiedName}\" \u2192 row #{i + 1} \"{rows[i].UnmodifiedName}\" contains invalid file name character '<b>{invalidChar}</b>'. This row will be skipped.</color>");
+                    continue;
+                }
+
                 string assetPath = $"{path}/{rows[i].Name}.asset";
                 instances[i] = AssetDatabase.LoadAssetAtPath(assetPath, objectType);
 
@@ -119,6 +144,10 @@ namespace Com.Pamcha.CodaSync {
 
             // Set Asset Fields
             for (int i = 0; i < rows.Length; i++) {
+                // Skip rows that were not created (empty name or duplicate)
+                if (instances[i] == null)
+                    continue;
+
                 SetFields(structure, objectType, instances[i], rows[i].Values);
                 EditorUtility.SetDirty(instances[i]);
                 AssetDatabase.SaveAssetIfDirty(instances[i]);
@@ -216,7 +245,7 @@ namespace Com.Pamcha.CodaSync {
                         if (asset != null) {
                             return asset;
                         } else {
-                            Debug.LogWarning($"Coda Sync : Asset not found at path: {assetRef.AssetPath} for asset {assetName}");
+                            Debug.Log($"<color=#E8A838>\u26a0\ufe0f <b>[CodaSync]</b> Asset \"{assetName}\" not found at path: {assetRef.AssetPath}</color>");
                         }
                     }
                 }
@@ -292,14 +321,14 @@ namespace Com.Pamcha.CodaSync {
 
         private static IEnumerator LoadImage(string url, Action<Texture2D> callback) {
             UnityWebRequest req = UnityWebRequestTexture.GetTexture(url);
-            Debug.Log($"Requesting Image {url}");
             yield return req.SendWebRequest();
-            Debug.Log($"Result for {url} : {req.result}");
 
-            if (req.result == UnityWebRequest.Result.Success)
+            if (req.result == UnityWebRequest.Result.Success) {
                 callback(((DownloadHandlerTexture)req.downloadHandler).texture);
-            else
+            } else {
+                Debug.Log($"<color=#E85B5B>\u274c <b>[CodaSync]</b> Failed to load image from {url}: {req.error}</color>");
                 callback(null);
+            }
         }
         #endregion
 
@@ -401,23 +430,25 @@ namespace Com.Pamcha.CodaSync {
             return Uri.TryCreate(url, UriKind.Absolute, out Uri _);
         }
 
-        // OPTIONAL: Uncomment for debugging asset resolution
-        /*
-        private static void LogAssetResolutionInfo(Type assetType, string assetName) {
-            Debug.Log($"Coda Sync Debug: Resolving {assetType.Name} with name '{assetName}'");
-            
-            if (assetRefs.ContainsKey(assetType)) {
-                AssetRef[] refs = assetRefs[assetType];
-                Debug.Log($"Found {refs.Length} asset references for type {assetType.Name}");
-                
-                foreach (var assetRef in refs) {
-                    Debug.Log($"- Asset: {assetRef.AssetName}, Path: {assetRef.AssetPath}");
-                }
-            } else {
-                Debug.Log($"No asset references found for type {assetType.Name}");
+        // Characters that Unity rejects in asset file names (cross-platform).
+        // Path.GetInvalidFileNameChars() is OS-specific (macOS only blocks \0 and /),
+        // so we enforce the full Windows set to match Unity's AssetDatabase behavior.
+        private static readonly HashSet<char> InvalidAssetNameChars = new HashSet<char>(
+            new[] { '<', '>', ':', '"', '/', '\\', '|', '?', '*' }
+        );
+
+        /// <summary>
+        /// Checks if a name contains characters that Unity rejects in asset file names.
+        /// Returns the first invalid character found, or null if the name is valid.
+        /// </summary>
+        private static char? GetInvalidFileNameChar(string name) {
+            for (int i = 0; i < name.Length; i++) {
+                if (InvalidAssetNameChars.Contains(name[i]) || char.IsControl(name[i]))
+                    return name[i];
             }
+            return null;
         }
-        */
+
         #endregion
     }
 }
