@@ -75,7 +75,15 @@ namespace Com.Pamcha.CodaSync {
         select,
         lookup,
         person,
-        image
+        image,
+        scale,
+        percent,
+        currency,
+        dateTime,
+        time,
+        duration,
+        email,
+        link
     }
     #endregion
 

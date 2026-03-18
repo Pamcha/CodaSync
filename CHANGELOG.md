@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-03-18
+### Added
+- Support for new Coda column types: `scale`, `percent`, `currency` (mapped to `float`), `dateTime` (mapped to `DateTime`), `time`, `duration`, `email`, `link` (mapped to `string`)
+
 ## [1.1.0] - 2026-02-27
 ### Added
 - **Validate Names button** in Table Importer inspector — checks table, column, and row names for invalid C# identifiers and reports issues in the console

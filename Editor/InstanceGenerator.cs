@@ -360,13 +360,22 @@ namespace Com.Pamcha.CodaSync {
                     return typeof(string);
                 case ColumnType.slider:
                 case ColumnType.number:
+                case ColumnType.scale:
+                case ColumnType.percent:
+                case ColumnType.currency:
                     return typeof(float);
                 case ColumnType.checkbox:
                     return typeof(bool);
                 case ColumnType.image:
                     return typeof(Sprite);
                 case ColumnType.date:
+                case ColumnType.dateTime:
                     return typeof(DateTime);
+                case ColumnType.time:
+                case ColumnType.duration:
+                case ColumnType.email:
+                case ColumnType.link:
+                    return typeof(string);
                 case ColumnType.lookup:
                     if (ImporterExporter.TypeTables.Contains(column.Format.Table.Name))
                         return GetAssetType(column.Format.Table.Name);

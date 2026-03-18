@@ -279,6 +279,9 @@ namespace {TableImporter.CodeNamespace} {{
                     break;
                 case ColumnType.slider:
                 case ColumnType.number:
+                case ColumnType.scale:
+                case ColumnType.percent:
+                case ColumnType.currency:
                     type = "float";
                     break;
                 case ColumnType.checkbox:
@@ -288,7 +291,14 @@ namespace {TableImporter.CodeNamespace} {{
                     type = "Sprite";
                     break;
                 case ColumnType.date:
+                case ColumnType.dateTime:
                     type = "System.DateTime";
+                    break;
+                case ColumnType.time:
+                case ColumnType.duration:
+                case ColumnType.email:
+                case ColumnType.link:
+                    type = "string";
                     break;
                 case ColumnType.lookup:
                     type = $"{column.Format.Table.Name}";
