@@ -125,6 +125,11 @@ namespace Com.Pamcha.CodaSync {
 
         private void SetTableSelectionState(bool state) {
             for (int i = 0; i < script.tableSelection.Count; i++) {
+                // Don't deselect Type Tables — they're hidden from the UI and must stay selected
+                // so that asset references (Sprite, AudioClip, etc.) are always resolved during import.
+                if (!state && ImporterExporter.TypeTables.Contains(script.tableSelection[i].tableDescription.name))
+                    continue;
+
                 script.tableSelection[i].selected = state;
             }
         }

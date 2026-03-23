@@ -127,9 +127,26 @@ namespace Com.Pamcha.CodaSync {
         public string AssetPath;
 
         public AssetRef(Object asset) {
-            AssetName = asset.name;
-            AssetId = asset.GetInstanceID();
             AssetPath = AssetDatabase.GetAssetPath(asset);
+            AssetId = asset.GetInstanceID();
+
+            if (!AssetDatabase.IsMainAsset(asset)) {
+                // For sub-assets, check if this is the only one (e.g. single sprite mode).
+                // If so, use the file name for a cleaner display in Coda.
+                // If multiple sub-assets exist (e.g. sprite sheet), keep asset.name with
+                // its suffix (_0, _1, ...) to distinguish each slice.
+                Object[] allAtPath = AssetDatabase.LoadAllAssetsAtPath(AssetPath);
+                int subAssetCount = 0;
+                foreach (var a in allAtPath) {
+                    if (!AssetDatabase.IsMainAsset(a)) subAssetCount++;
+                }
+
+                AssetName = subAssetCount == 1
+                    ? System.IO.Path.GetFileNameWithoutExtension(AssetPath)
+                    : asset.name;
+            } else {
+                AssetName = asset.name;
+            }
         }
     }
 }

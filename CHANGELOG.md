@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-03-23
+### Fixed
+- Asset reference resolution now works when importing a subset of tables — Type Tables (Sprite, AudioClip, etc.) are automatically fetched during import even if only specific tables are selected
+- "Deselect All" in Table Importer no longer deselects hidden Type Tables, preventing accidental loss of asset reference data
+- Asset Reference Exporter no longer double-counts assets — previously, a single sprite file was counted as 2 assets (Texture2D + Sprite sub-asset)
+- Single sprites are now exported with their file name (e.g. "Emile Placeholder") instead of Unity's internal sub-asset name (e.g. "Emile Placeholder_0"). Sprite sheets still use per-slice names (_0, _1, etc.)
+
 ## [1.1.1] - 2026-03-18
 ### Added
 - Support for new Coda column types: `scale`, `percent`, `currency` (mapped to `float`), `dateTime` (mapped to `DateTime`), `time`, `duration`, `email`, `link` (mapped to `string`)

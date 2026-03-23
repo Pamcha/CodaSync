@@ -186,11 +186,28 @@ namespace Com.Pamcha.CodaSync {
 
                 for (int i = 0; i < guids.Length; i++) {
                     string assetPath = AssetDatabase.GUIDToAssetPath(guids[i]);
-                    //if asset is a game object we just add the main asset at path so we don't explore recursively the game object and export each one of its children
-                    if(AssetDatabase.LoadMainAssetAtPath(assetPath).GetType() == typeof(GameObject))
-                        assets.Add(AssetDatabase.LoadMainAssetAtPath(assetPath));
-                    else
-                        assets.AddRange(AssetDatabase.LoadAllAssetsAtPath(assetPath));
+                    Object mainAsset = AssetDatabase.LoadMainAssetAtPath(assetPath);
+
+                    if (mainAsset == null)
+                        continue;
+
+                    if (mainAsset.GetType() == typeof(GameObject)) {
+                        // Don't explore recursively — just add the prefab itself
+                        assets.Add(mainAsset);
+                    } else {
+                        Object[] allAssets = AssetDatabase.LoadAllAssetsAtPath(assetPath);
+                        if (allAssets.Length > 1) {
+                            // Has sub-assets (e.g. Texture2D + Sprite): keep only sub-assets
+                            // to avoid counting the container asset (Texture2D) alongside the
+                            // actual usable asset (Sprite).
+                            for (int j = 0; j < allAssets.Length; j++) {
+                                if (!AssetDatabase.IsMainAsset(allAssets[j]))
+                                    assets.Add(allAssets[j]);
+                            }
+                        } else {
+                            assets.Add(mainAsset);
+                        }
+                    }
                 }
             }
             

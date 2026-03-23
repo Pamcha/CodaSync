@@ -216,7 +216,9 @@ namespace Com.Pamcha.CodaSync {
 
             List<TableDescriptionData> tables = new List<TableDescriptionData>();
             for (int i = 0; i < tableSelection.Count; i++) {
-                if (tableSelection[i].selected)
+                // Always include Type Tables (Sprite, AudioClip, etc.) so that asset references
+                // can be resolved even when the user imports only a subset of tables.
+                if (tableSelection[i].selected || TypeTables.Contains(tableSelection[i].tableDescription.name))
                     tables.Add(tableSelection[i].tableDescription);
             }
 
