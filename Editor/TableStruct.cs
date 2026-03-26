@@ -4,6 +4,12 @@ using UnityEditor;
 using UnityEngine;
 
 namespace Com.Pamcha.CodaSync {
+    public static class CodaSyncUtils {
+        public static string SanitizeName(string name) {
+            return string.IsNullOrEmpty(name) ? "" : name.Trim().Replace(' ', '_').Replace('-', '_');
+        }
+    }
+
     [System.Serializable]
     public struct TableStructure {
         [JsonProperty]
@@ -22,7 +28,7 @@ namespace Com.Pamcha.CodaSync {
         public string Type { get => type; set { type = value; } }
         public string TableType { get => tableType; set { tableType = value; } }
         public string UnmodifiedName { get => name; set => name = value; }
-        public string Name { get => string.IsNullOrEmpty(name) ? "" : name.Trim().Replace(' ', '_').Replace('-', '_'); }
+        public string Name { get => CodaSyncUtils.SanitizeName(name); }
         public TableColumn[] Items { get => items; set { items = value; } }
     }
 
@@ -37,7 +43,7 @@ namespace Com.Pamcha.CodaSync {
         private ColumnFormat format;
 
         public string Id { get => id; }
-        public string Name { get => string.IsNullOrEmpty(name) ? "" : name.Trim().Replace(' ', '_').Replace('-', '_'); }
+        public string Name { get => CodaSyncUtils.SanitizeName(name); }
         public ColumnFormat Format { get => format; }
     }
 
@@ -62,7 +68,7 @@ namespace Com.Pamcha.CodaSync {
         private string name;
 
         public string Id { get => id; }
-        public string Name { get => string.IsNullOrEmpty(name) ? "" : name.Trim().Replace(' ', '_').Replace('-', '_'); }
+        public string Name { get => CodaSyncUtils.SanitizeName(name); }
     }
 
     public enum ColumnType {
@@ -98,7 +104,7 @@ namespace Com.Pamcha.CodaSync {
         private Dictionary<string, string> values;
 
         public string Id { get => id; }
-        public string Name { get => string.IsNullOrEmpty(name) ? "" : name.Trim().Replace(' ', '_').Replace('-', '_'); }
+        public string Name { get => CodaSyncUtils.SanitizeName(name); }
         public string UnmodifiedName { get => name; }
         public Dictionary<string, string> Values { get => values; }
     }
@@ -117,6 +123,80 @@ namespace Com.Pamcha.CodaSync {
     public struct Cell {
         public string column;
         public string value;
+    }
+    #endregion
+
+    #region Import Report
+    public class ImportReport {
+        public struct LookupFailure {
+            public string tableName;
+            public string fieldName;
+            public string missingAsset;
+            public string referencedTable;
+            public bool tableWasImported;
+        }
+
+        public struct InstanceInfo {
+            public string tableName;
+            public int created;
+            public int updated;
+            public int skipped;
+        }
+
+        public List<InstanceInfo> instances = new List<InstanceInfo>();
+        public List<LookupFailure> lookupFailures = new List<LookupFailure>();
+        public List<string> warnings = new List<string>();
+
+        public void LogToConsole() {
+            // Header
+            Debug.Log("<color=#5B9BD5>\ud83d\udccb <b>[CodaSync] Import Report</b></color>");
+
+            // Instances summary
+            int totalCreated = 0, totalUpdated = 0, totalSkipped = 0;
+            foreach (var info in instances) {
+                totalCreated += info.created;
+                totalUpdated += info.updated;
+                totalSkipped += info.skipped;
+            }
+
+            string instancesSummary = $"    <b>Assets:</b> {totalCreated} created, {totalUpdated} updated";
+            if (totalSkipped > 0) instancesSummary += $", {totalSkipped} skipped";
+            Debug.Log($"<color=#6ECB63>{instancesSummary}</color>");
+
+            // Per-table detail
+            foreach (var info in instances) {
+                string detail = $"      \u2514 {info.tableName}: {info.created} created, {info.updated} updated";
+                if (info.skipped > 0) detail += $", {info.skipped} skipped";
+                Debug.Log($"<color=#AAAAAA>{detail}</color>");
+            }
+
+            // Lookup failures
+            if (lookupFailures.Count > 0) {
+                Debug.Log($"<color=#E8A838>    <b>Lookup failures:</b> {lookupFailures.Count}</color>");
+                foreach (var failure in lookupFailures) {
+                    string suggestion = failure.tableWasImported
+                        ? $"Check that \"{failure.missingAsset}\" exists in \"{failure.referencedTable}\" in Coda"
+                        : $"Make sure table \"{failure.referencedTable}\" is selected for import";
+                    Debug.Log($"<color=#E8A838>      \u2514 {failure.tableName}.{failure.fieldName} \u2192 \"{failure.missingAsset}\" not found in {failure.referencedTable}. {suggestion}</color>");
+                }
+            }
+
+            // Warnings
+            if (warnings.Count > 0) {
+                Debug.Log($"<color=#E8A838>    <b>Warnings:</b> {warnings.Count}</color>");
+                foreach (var warning in warnings) {
+                    Debug.Log($"<color=#E8A838>      \u2514 {warning}</color>");
+                }
+            }
+
+            // Final status
+            if (lookupFailures.Count == 0 && warnings.Count == 0) {
+                Debug.Log("<color=#6ECB63>\u2705 <b>[CodaSync]</b> Import completed successfully.</color>");
+            } else {
+                int issueCount = lookupFailures.Count + warnings.Count;
+                Debug.Log($"<color=#E8A838>\u26a0\ufe0f <b>[CodaSync]</b> Import completed with {issueCount} issue(s).</color>");
+            }
+        }
     }
     #endregion
 

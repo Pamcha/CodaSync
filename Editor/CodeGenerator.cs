@@ -30,7 +30,7 @@ namespace Com.Pamcha.CodaSync {
                 return "_empty";
 
             // Replace spaces and hyphens with underscores (existing behavior)
-            string sanitized = name.Trim().Replace(' ', '_').Replace('-', '_');
+            string sanitized = CodaSyncUtils.SanitizeName(name);
 
             // Remove all remaining invalid characters
             sanitized = Regex.Replace(sanitized, @"[^a-zA-Z0-9_]", "");

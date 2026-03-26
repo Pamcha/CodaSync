@@ -17,8 +17,14 @@ namespace Com.Pamcha.CodaSync {
         private static Dictionary<string, Type> allTypes;
         private static string basePath;
         private static Dictionary<Type, AssetRef[]> assetRefs = new Dictionary<Type, AssetRef[]>();
+        private static ImportReport report;
+        private static TableStructure[] allStructures;
+        private static string currentTableName;
+        private static string currentFieldName;
 
-        public static void CreateAllInstances(TableStructure[] structures, TableRow[][] tablesRows, string path) {
+        public static void CreateAllInstances(TableStructure[] structures, TableRow[][] tablesRows, string path, ImportReport importReport) {
+            report = importReport;
+            allStructures = structures;
             LoadAssetRefs(structures, tablesRows);
 
             Dictionary<TableStructure, dynamic[]> instances = new Dictionary<TableStructure, dynamic[]>();
@@ -71,7 +77,7 @@ namespace Com.Pamcha.CodaSync {
                 bool success = int.TryParse(assetIdString, out int assetId);
 
                 if (!success) {
-                    Debug.Log($"<color=#E8A838>\u26a0\ufe0f <b>[CodaSync]</b> Asset \"{rows[i].Values[GetColumnIdByName(structure, "AssetName")]}\" can't be referenced (invalid AssetId). Check your AssetReferences in Coda.</color>");
+                    report.warnings.Add($"Asset \"{rows[i].Values[GetColumnIdByName(structure, "AssetName")]}\" can't be referenced (invalid AssetId). Check your AssetReferences in Coda.");
                     continue;
                 }
 
@@ -99,23 +105,27 @@ namespace Com.Pamcha.CodaSync {
 
             // Track seen names to skip duplicates (duplicates cause asset overwrites and broken lookups)
             HashSet<string> seenNames = new HashSet<string>();
+            int created = 0, updated = 0, skipped = 0;
 
             // Create Assets
             dynamic[] instances = new dynamic[rows.Length];
             for (int i = 0; i < rows.Length; i++) {
                 if (string.IsNullOrWhiteSpace(rows[i].Name)) {
-                    Debug.Log($"<color=#E8A838>\u26a0\ufe0f <b>[CodaSync]</b> Table \"{structure.UnmodifiedName}\" \u2192 row #{i + 1} has an <b>empty display column</b>. This row will be skipped.</color>");
+                    report.warnings.Add($"Table \"{structure.UnmodifiedName}\" \u2192 row #{i + 1} has an empty display column. Skipped.");
+                    skipped++;
                     continue;
                 }
 
                 if (!seenNames.Add(rows[i].Name)) {
-                    Debug.Log($"<color=#E85B5B>\u274c <b>[CodaSync]</b> Table \"{structure.UnmodifiedName}\" \u2192 row #{i + 1} \"{rows[i].UnmodifiedName}\" is a <b>duplicate name</b> (resolves to \"{rows[i].Name}\"). Skipped to avoid asset overwrite.</color>");
+                    report.warnings.Add($"Table \"{structure.UnmodifiedName}\" \u2192 row #{i + 1} \"{rows[i].UnmodifiedName}\" is a duplicate name (resolves to \"{rows[i].Name}\"). Skipped.");
+                    skipped++;
                     continue;
                 }
 
                 char? invalidChar = GetInvalidFileNameChar(rows[i].Name);
                 if (invalidChar != null) {
-                    Debug.Log($"<color=#E85B5B>\u274c <b>[CodaSync]</b> Table \"{structure.UnmodifiedName}\" \u2192 row #{i + 1} \"{rows[i].UnmodifiedName}\" contains invalid file name character '<b>{invalidChar}</b>'. This row will be skipped.</color>");
+                    report.warnings.Add($"Table \"{structure.UnmodifiedName}\" \u2192 row #{i + 1} \"{rows[i].UnmodifiedName}\" contains invalid character '{invalidChar}'. Skipped.");
+                    skipped++;
                     continue;
                 }
 
@@ -125,10 +135,20 @@ namespace Com.Pamcha.CodaSync {
                 if (instances[i] == null) {
                     instances[i] = ScriptableObject.CreateInstance(objectType);
                     AssetDatabase.CreateAsset(instances[i], assetPath);
+                    created++;
+                } else {
+                    updated++;
                 }
 
                 instanceList.Add(instances[i]);
             }
+
+            report.instances.Add(new ImportReport.InstanceInfo {
+                tableName = structure.UnmodifiedName,
+                created = created,
+                updated = updated,
+                skipped = skipped
+            });
 
             FieldInfo instanceListField = databaseType.GetField($"List", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
             instanceListField.SetValue(database, instanceList);
@@ -141,6 +161,7 @@ namespace Com.Pamcha.CodaSync {
 
         private static void SetAllFields(TableStructure structure, dynamic[] instances, TableRow[] rows) {
             Type objectType = allTypes[$"{TableImporter.CodeNamespace}.{structure.Name}"];
+            currentTableName = structure.UnmodifiedName;
 
             // Set Asset Fields
             for (int i = 0; i < rows.Length; i++) {
@@ -161,6 +182,7 @@ namespace Com.Pamcha.CodaSync {
                     continue;
                 }
 
+                currentFieldName = column.Value.Name;
                 FieldInfo instanceField = instanceType.GetField(column.Value.Name, BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
 
                 if (!column.Value.Format.IsArray)
@@ -228,7 +250,32 @@ namespace Com.Pamcha.CodaSync {
             if (asset != null) return asset;
 
             // Fallback to search-based resolution for compatibility
-            return FindAssetBySearch(assetType, assetName);
+            asset = FindAssetBySearch(assetType, assetName);
+
+            if (asset == null && !IsFieldEmpty(assetName)) {
+                // Determine which table this lookup targets
+                string referencedTable = assetType.Name;
+                bool wasImported = false;
+                if (allStructures != null) {
+                    foreach (var s in allStructures) {
+                        if (s.Name == referencedTable || s.UnmodifiedName == referencedTable) {
+                            wasImported = true;
+                            referencedTable = s.UnmodifiedName;
+                            break;
+                        }
+                    }
+                }
+
+                report.lookupFailures.Add(new ImportReport.LookupFailure {
+                    tableName = currentTableName,
+                    fieldName = currentFieldName,
+                    missingAsset = assetName,
+                    referencedTable = referencedTable,
+                    tableWasImported = wasImported
+                });
+            }
+
+            return asset;
         }
 
         /// <summary>
@@ -245,7 +292,7 @@ namespace Com.Pamcha.CodaSync {
                         if (asset != null) {
                             return asset;
                         } else {
-                            Debug.Log($"<color=#E8A838>\u26a0\ufe0f <b>[CodaSync]</b> Asset \"{assetName}\" not found at path: {assetRef.AssetPath}</color>");
+                            report.warnings.Add($"Asset \"{assetName}\" not found at path: {assetRef.AssetPath}");
                         }
                     }
                 }
@@ -270,7 +317,7 @@ namespace Com.Pamcha.CodaSync {
                 string assetPath = AssetDatabase.GUIDToAssetPath(resultGUIDS[i]);
                 dynamic asset = AssetDatabase.LoadAssetAtPath(assetPath, assetType);
 
-                string normalizedExpected = assetName.Replace(" ", "_");
+                string normalizedExpected = CodaSyncUtils.SanitizeName(assetName);
 
                 // Extract just the filename from asset.name
                 // (handles case where SO has a 'name' field that shadows UnityEngine.Object.name)
@@ -400,6 +447,8 @@ namespace Com.Pamcha.CodaSync {
                     return typeof(AnimatorController);
                 case "Animation":
                     return typeof(Animation);
+                case "GameObject":
+                    return typeof(GameObject);
                 default:
                     return typeof(UnityEngine.Object);
             }

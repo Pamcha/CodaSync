@@ -23,6 +23,7 @@ namespace Com.Pamcha.CodaSync {
         public static string CodeNamespace { get; private set; }
         private const string editorPrefKeyShouldCreateInstances = "Com.Pamcha.CodaImporter.ShouldCreateInstances";
         private const string editorPrefKeyTablesStructure = "Com.Pamcha.CodaImporter.TablesStructure";
+        private const string editorPrefKeyPreviousFields = "Com.Pamcha.CodaImporter.PreviousFields";
 
         private static bool isCancelled = false;
 
@@ -243,6 +244,10 @@ namespace Com.Pamcha.CodaSync {
             LogNameValidationReport(tableList, duringImport: true);
 
             CodeNamespace = codeNamespace;
+
+            // Snapshot existing fields before code generation for the import report
+            SnapshotExistingFields(tableList);
+
             CodeFiles[] codes = CodeGenerator.GetCodeFromTableStructures(tableList);
 
             for (int i = 0; i < tableList.Length; i++) {
@@ -329,16 +334,97 @@ namespace Com.Pamcha.CodaSync {
                 return;
             }
 
-            InstanceGenerator.CreateAllInstances(structures, tablesRows, instancesPath);
+            ImportReport report = new ImportReport();
+            BuildClassChangeReport(structures, report);
+            InstanceGenerator.CreateAllInstances(structures, tablesRows, instancesPath, report);
 
             AssetDatabase.Refresh();
 
-            EditorUtility.DisplayProgressBar("Coda Table Import", "Import complete!", 1);
             EditorUtility.ClearProgressBar();
+            report.LogToConsole();
 
             lastSyncDateString = $"{System.DateTime.UtcNow:R}";
             lastSyncLocalDateString = lastSyncDateString;
             EditorUtility.SetDirty(this);
+        }
+
+        /// <summary>
+        /// Saves existing field names per table type to EditorPrefs so we can compare after recompilation.
+        /// </summary>
+        private void SnapshotExistingFields(TableStructure[] tableList) {
+            Dictionary<string, List<string>> snapshot = new Dictionary<string, List<string>>();
+
+            foreach (var table in tableList) {
+                if (TypeTables.Contains(table.UnmodifiedName))
+                    continue;
+
+                string fullTypeName = $"{codeNamespace}.{table.Name}";
+                System.Type existingType = null;
+                foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies()) {
+                    existingType = assembly.GetType(fullTypeName);
+                    if (existingType != null) break;
+                }
+
+                if (existingType != null) {
+                    var fields = existingType.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                    List<string> fieldNames = new List<string>();
+                    foreach (var f in fields)
+                        fieldNames.Add(f.Name);
+                    snapshot[table.Name] = fieldNames;
+                }
+            }
+
+            EditorPrefs.SetString(editorPrefKeyPreviousFields, JsonConvert.SerializeObject(snapshot));
+        }
+
+        /// <summary>
+        /// Compares new columns against the snapshot taken before code generation,
+        /// and adds class change info to the report.
+        /// </summary>
+        private static void BuildClassChangeReport(TableStructure[] structures, ImportReport report) {
+            string json = EditorPrefs.GetString(editorPrefKeyPreviousFields, "{}");
+            Dictionary<string, List<string>> previousFields = JsonConvert.DeserializeObject<Dictionary<string, List<string>>>(json);
+
+            foreach (var structure in structures) {
+                if (ImporterExporter.TypeTables.Contains(structure.UnmodifiedName))
+                    continue;
+
+                // Collect new field names from columns
+                HashSet<string> newFields = new HashSet<string>();
+                if (structure.Items != null) {
+                    foreach (var col in structure.Items)
+                        newFields.Add(col.Name);
+                }
+
+                if (!previousFields.ContainsKey(structure.Name)) {
+                    // New class
+                    report.warnings.Add($"New class generated: {structure.Name} ({newFields.Count} fields)");
+                } else {
+                    HashSet<string> oldFields = new HashSet<string>(previousFields[structure.Name]);
+                    List<string> added = new List<string>();
+                    List<string> removed = new List<string>();
+
+                    foreach (string f in newFields) {
+                        if (!oldFields.Contains(f)) added.Add(f);
+                    }
+                    foreach (string f in oldFields) {
+                        if (!newFields.Contains(f)) removed.Add(f);
+                    }
+
+                    if (added.Count > 0 || removed.Count > 0) {
+                        string changes = "";
+                        if (added.Count > 0) changes += $"+{added.Count} ({string.Join(", ", added)})";
+                        if (removed.Count > 0) {
+                            if (changes.Length > 0) changes += ", ";
+                            changes += $"-{removed.Count} ({string.Join(", ", removed)})";
+                        }
+                        report.warnings.Add($"Class updated: {structure.Name} \u2192 {changes}");
+                    }
+                }
+            }
+
+            // Cleanup
+            EditorPrefs.DeleteKey(editorPrefKeyPreviousFields);
         }
 
         private static void CancelImport() {

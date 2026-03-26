@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-03-26
+### Added
+- **Import report** — structured console output at the end of each import showing asset stats (created/updated/skipped per table), class changes (new classes, added/removed fields), lookup failures with actionable suggestions, and warnings
+- When a lookup fails, the report now suggests whether the referenced table was not selected for import or whether the row is missing in Coda
+
+### Fixed
+- Lookup columns referencing rows with dashes in their name (e.g. "Demir - Base") failed to resolve — name sanitization was inconsistent between asset creation and lookup resolution
+- GameObject lookup columns failed to resolve — missing type mapping in `GetAssetType()`
+- Extracted shared `CodaSyncUtils.SanitizeName()` method to prevent future sanitization divergence between `TableStruct`, `CodeGenerator`, and `InstanceGenerator`
+
 ## [1.1.2] - 2026-03-23
 ### Fixed
 - Asset reference resolution now works when importing a subset of tables — Type Tables (Sprite, AudioClip, etc.) are automatically fetched during import even if only specific tables are selected
