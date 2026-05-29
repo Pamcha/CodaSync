@@ -50,6 +50,14 @@ namespace Com.Pamcha.CodaSync {
         }
 
         private void OnTableListResponse(UnityWebRequest req, Action<TableDescriptionData[]> callback) {
+            // TableListResponse is a (non-nullable) struct, so DeserializeObject throws on an empty
+            // body instead of returning null. An empty/failed response can happen on rate-limit (429),
+            // timeout, token cooldown or a network hiccup — guard so it never becomes an exception.
+            if (req.result != UnityWebRequest.Result.Success || string.IsNullOrEmpty(req.downloadHandler.text)) {
+                Debug.LogWarning($"⚠️ <b>[CodaSync]</b> Empty/failed response from Coda API: {req.error ?? "no content"}");
+                return;
+            }
+
             string jsonString = req.downloadHandler.text;
             callback(JsonConvert.DeserializeObject<TableListResponse>(jsonString).items);
         }

@@ -31,14 +31,29 @@ namespace Com.Pamcha.CodaSync {
             base.OnValidate();
 
             if (requester != null && docIdFound) {
-                EditorUtility.DisplayProgressBar("Coda Table Import", "Requesting tables list", 0);
-                GetTableList(OnUpdateTableList);
+                // Don't fire the network request synchronously here: Unity calls OnValidate on every
+                // re-import (script reload, entering Play mode, the sync rewriting lastSyncDateString,
+                // AssetDatabase.Refresh) — potentially several times per frame. Debounce through
+                // delayCall so we issue at most one request once the current event burst settles.
+                EditorApplication.delayCall -= DeferredTableListRefresh;
+                EditorApplication.delayCall += DeferredTableListRefresh;
             }
 
             if (EditorPrefs.GetBool(editorPrefKeyShouldCreateInstances, true)) {
                 EditorPrefs.SetBool(editorPrefKeyShouldCreateInstances, false);
                 CreateInstances();
             }
+        }
+
+        private void DeferredTableListRefresh() {
+            EditorApplication.delayCall -= DeferredTableListRefresh;
+
+            // The asset may have been destroyed or reconfigured between the OnValidate burst and now.
+            if (this == null || requester == null || !docIdFound)
+                return;
+
+            EditorUtility.DisplayProgressBar("Coda Table Import", "Requesting tables list", 0);
+            GetTableList(OnUpdateTableList);
         }
 
         private void OnCompilation(string s, CompilerMessage[] messages) {

@@ -140,6 +140,7 @@ namespace Com.Pamcha.CodaSync {
             public string tableName;
             public int created;
             public int updated;
+            public int unchanged;
             public int skipped;
         }
 
@@ -152,20 +153,23 @@ namespace Com.Pamcha.CodaSync {
             Debug.Log("<color=#5B9BD5>\ud83d\udccb <b>[CodaSync] Import Report</b></color>");
 
             // Instances summary
-            int totalCreated = 0, totalUpdated = 0, totalSkipped = 0;
+            int totalCreated = 0, totalUpdated = 0, totalUnchanged = 0, totalSkipped = 0;
             foreach (var info in instances) {
                 totalCreated += info.created;
                 totalUpdated += info.updated;
+                totalUnchanged += info.unchanged;
                 totalSkipped += info.skipped;
             }
 
             string instancesSummary = $"    <b>Assets:</b> {totalCreated} created, {totalUpdated} updated";
+            if (totalUnchanged > 0) instancesSummary += $", {totalUnchanged} unchanged";
             if (totalSkipped > 0) instancesSummary += $", {totalSkipped} skipped";
             Debug.Log($"<color=#6ECB63>{instancesSummary}</color>");
 
             // Per-table detail
             foreach (var info in instances) {
                 string detail = $"      \u2514 {info.tableName}: {info.created} created, {info.updated} updated";
+                if (info.unchanged > 0) detail += $", {info.unchanged} unchanged";
                 if (info.skipped > 0) detail += $", {info.skipped} skipped";
                 Debug.Log($"<color=#AAAAAA>{detail}</color>");
             }

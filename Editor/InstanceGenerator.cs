@@ -28,6 +28,7 @@ namespace Com.Pamcha.CodaSync {
             LoadAssetRefs(structures, tablesRows);
 
             Dictionary<TableStructure, dynamic[]> instances = new Dictionary<TableStructure, dynamic[]>();
+            Dictionary<TableStructure, TableImportState> states = new Dictionary<TableStructure, TableImportState>();
             basePath = path;
 
             for (int i = 0; i < structures.Length; i++) {
@@ -38,7 +39,8 @@ namespace Com.Pamcha.CodaSync {
                 if (!Directory.Exists(instancePath))
                     Directory.CreateDirectory(instancePath);
 
-                instances[structures[i]] = CreateInstances(structures[i], tablesRows[i], instancePath);
+                instances[structures[i]] = CreateInstances(structures[i], tablesRows[i], instancePath, out TableImportState state);
+                states[structures[i]] = state;
             }
 
             // Flush all newly created assets to disk before resolving lookups in pass 2.
@@ -51,8 +53,22 @@ namespace Com.Pamcha.CodaSync {
                 if (ImporterExporter.TypeTables.Contains(structures[i].UnmodifiedName))
                     continue;
 
-                SetAllFields(structures[i], instances[structures[i]], tablesRows[i]);
+                SetAllFields(structures[i], instances[structures[i]], tablesRows[i], states[structures[i]]);
             }
+        }
+
+        /// <summary>
+        /// Per-table state carried from pass 1 (asset creation) to pass 2 (field assignment) so the
+        /// import report can tell created / updated / unchanged apart. The real created-vs-updated-vs-
+        /// unchanged verdict is only known after fields are written in pass 2, so we capture a "before"
+        /// snapshot of each pre-existing asset here and diff it once the fields are set.
+        /// </summary>
+        private class TableImportState {
+            public int created;
+            public int skipped;
+            // Aligned with the instances array. null = the asset was created this import (no diff needed);
+            // non-null = EditorJsonUtility snapshot of the pre-existing asset before fields were written.
+            public string[] beforeSnapshots;
         }
 
         #region Assets Loading
@@ -93,7 +109,7 @@ namespace Com.Pamcha.CodaSync {
         #endregion
 
         #region Instance Creation
-        private static dynamic[] CreateInstances(TableStructure structure, TableRow[] rows, string path) {
+        private static dynamic[] CreateInstances(TableStructure structure, TableRow[] rows, string path, out TableImportState state) {
             ScriptableObject database = ScriptableObject.CreateInstance($"{structure.Name}_DB");
             AssetDatabase.CreateAsset(database, $"{path}/_{structure.Name}_Database.asset");
 
@@ -105,10 +121,14 @@ namespace Com.Pamcha.CodaSync {
 
             // Track seen names to skip duplicates (duplicates cause asset overwrites and broken lookups)
             HashSet<string> seenNames = new HashSet<string>();
-            int created = 0, updated = 0, skipped = 0;
+            int created = 0, skipped = 0;
 
             // Create Assets
             dynamic[] instances = new dynamic[rows.Length];
+            // Snapshot of each pre-existing asset BEFORE fields are written. The updated/unchanged
+            // verdict can't be made here \u2014 fields (and lookups) are only assigned in pass 2 \u2014 so we
+            // record the "before" state now and diff it in SetAllFields. null = created this import.
+            string[] beforeSnapshots = new string[rows.Length];
             for (int i = 0; i < rows.Length; i++) {
                 if (string.IsNullOrWhiteSpace(rows[i].Name)) {
                     report.warnings.Add($"Table \"{structure.UnmodifiedName}\" \u2192 row #{i + 1} has an empty display column. Skipped.");
@@ -137,18 +157,20 @@ namespace Com.Pamcha.CodaSync {
                     AssetDatabase.CreateAsset(instances[i], assetPath);
                     created++;
                 } else {
-                    updated++;
+                    // Capture the on-disk state before pass 2 overwrites the fields.
+                    beforeSnapshots[i] = EditorJsonUtility.ToJson(instances[i]);
                 }
 
                 instanceList.Add(instances[i]);
             }
 
-            report.instances.Add(new ImportReport.InstanceInfo {
-                tableName = structure.UnmodifiedName,
+            // The report entry (created/updated/unchanged/skipped) is added in SetAllFields, once the
+            // real diff is known. created and skipped are final here; carry them forward via state.
+            state = new TableImportState {
                 created = created,
-                updated = updated,
-                skipped = skipped
-            });
+                skipped = skipped,
+                beforeSnapshots = beforeSnapshots
+            };
 
             FieldInfo instanceListField = databaseType.GetField($"List", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
             instanceListField.SetValue(database, instanceList);
@@ -159,9 +181,11 @@ namespace Com.Pamcha.CodaSync {
             return instances;
         }
 
-        private static void SetAllFields(TableStructure structure, dynamic[] instances, TableRow[] rows) {
+        private static void SetAllFields(TableStructure structure, dynamic[] instances, TableRow[] rows, TableImportState state) {
             Type objectType = allTypes[$"{TableImporter.CodeNamespace}.{structure.Name}"];
             currentTableName = structure.UnmodifiedName;
+
+            int updated = 0, unchanged = 0;
 
             // Set Asset Fields
             for (int i = 0; i < rows.Length; i++) {
@@ -170,9 +194,37 @@ namespace Com.Pamcha.CodaSync {
                     continue;
 
                 SetFields(structure, objectType, instances[i], rows[i].Values);
-                EditorUtility.SetDirty(instances[i]);
-                AssetDatabase.SaveAssetIfDirty(instances[i]);
+
+                // Freshly created this import (no "before" snapshot): always counted as created,
+                // and always saved.
+                if (state.beforeSnapshots[i] == null) {
+                    EditorUtility.SetDirty(instances[i]);
+                    AssetDatabase.SaveAssetIfDirty(instances[i]);
+                    continue;
+                }
+
+                // Pre-existing asset: diff the serialized state to tell updated from unchanged.
+                // Only mark dirty / save when something actually changed \u2014 this keeps the consumer's
+                // git diff clean and avoids needless asset rewrites.
+                // Note: image fields are assigned asynchronously (LoadImage coroutine) after this
+                // snapshot, so a row whose only change is an image is currently seen as unchanged.
+                string after = EditorJsonUtility.ToJson(instances[i]);
+                if (after != state.beforeSnapshots[i]) {
+                    updated++;
+                    EditorUtility.SetDirty(instances[i]);
+                    AssetDatabase.SaveAssetIfDirty(instances[i]);
+                } else {
+                    unchanged++;
+                }
             }
+
+            report.instances.Add(new ImportReport.InstanceInfo {
+                tableName = structure.UnmodifiedName,
+                created = state.created,
+                updated = updated,
+                unchanged = unchanged,
+                skipped = state.skipped
+            });
         }
 
         private static void SetFields(TableStructure structure, Type instanceType, dynamic instance, Dictionary<string, string> fields) {
