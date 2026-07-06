@@ -66,6 +66,7 @@ namespace Com.Pamcha.CodaSync {
         private class TableImportState {
             public int created;
             public int skipped;
+            public int renamed;
             // Aligned with the instances array. null = the asset was created this import (no diff needed);
             // non-null = EditorJsonUtility snapshot of the pre-existing asset before fields were written.
             public string[] beforeSnapshots;
@@ -109,6 +110,11 @@ namespace Com.Pamcha.CodaSync {
         #endregion
 
         #region Instance Creation
+        // Name of the private serialized row-id field emitted on every generated class (see
+        // CodeGenerator). The double underscore avoids collisions with sanitized column names,
+        // which are only ever prefixed with a single one.
+        private const string RowIdFieldName = "__codaRowId";
+
         private static dynamic[] CreateInstances(TableStructure structure, TableRow[] rows, string path, out TableImportState state) {
             ScriptableObject database = ScriptableObject.CreateInstance($"{structure.Name}_DB");
             AssetDatabase.CreateAsset(database, $"{path}/_{structure.Name}_Database.asset");
@@ -119,16 +125,46 @@ namespace Com.Pamcha.CodaSync {
             Type listType = typeof(List<>).MakeGenericType(objectType);
             dynamic instanceList = Activator.CreateInstance(listType);
 
+            // Row-id based identity: match existing assets by their stable Coda row id (i-xxxx)
+            // instead of their file name, so a row renamed in Coda renames the asset instead of
+            // duplicating it. The field is private on the generated class, hence reflection.
+            FieldInfo rowIdField = objectType.GetField(RowIdFieldName, BindingFlags.NonPublic | BindingFlags.Instance);
+
+            // Index the table's existing assets: by row id, and by file name for those without an
+            // id yet (pre-1.4 assets to migrate, or hand-made ones).
+            Dictionary<string, ScriptableObject> byId = new Dictionary<string, ScriptableObject>();
+            Dictionary<string, ScriptableObject> byName = new Dictionary<string, ScriptableObject>();
+            string[] existingGuids = AssetDatabase.FindAssets($"t:{structure.Name}", new[] { path });
+            foreach (string guid in existingGuids) {
+                string existingPath = AssetDatabase.GUIDToAssetPath(guid);
+                ScriptableObject existing = AssetDatabase.LoadAssetAtPath(existingPath, objectType) as ScriptableObject;
+                // FindAssets t: matches by short type name; make sure it really is this table's type
+                if (existing == null || existing.GetType() != objectType)
+                    continue;
+
+                string existingId = rowIdField?.GetValue(existing) as string;
+                if (!string.IsNullOrEmpty(existingId))
+                    byId[existingId] = existing;
+                else
+                    byName[Path.GetFileNameWithoutExtension(existingPath)] = existing;
+            }
+
             // Track seen names to skip duplicates (duplicates cause asset overwrites and broken lookups)
             HashSet<string> seenNames = new HashSet<string>();
-            int created = 0, skipped = 0;
+            int created = 0, skipped = 0, renamed = 0;
 
-            // Create Assets
             dynamic[] instances = new dynamic[rows.Length];
             // Snapshot of each pre-existing asset BEFORE fields are written. The updated/unchanged
-            // verdict can't be made here \u2014 fields (and lookups) are only assigned in pass 2 \u2014 so we
+            // verdict can't be made here (fields and lookups are only assigned in pass 2), so we
             // record the "before" state now and diff it in SetAllFields. null = created this import.
             string[] beforeSnapshots = new string[rows.Length];
+            // Rows that passed validation but matched no existing asset; created in a second pass,
+            // AFTER all renames, so a new row can't collide with a file a rename is about to free.
+            List<int> toCreate = new List<int>();
+            HashSet<ScriptableObject> matched = new HashSet<ScriptableObject>();
+
+            // Pass A: validate rows, match existing assets (by id, then by name for migration) and
+            // rename assets whose row was renamed in Coda.
             for (int i = 0; i < rows.Length; i++) {
                 if (string.IsNullOrWhiteSpace(rows[i].Name)) {
                     report.warnings.Add($"Table \"{structure.UnmodifiedName}\" \u2192 row #{i + 1} has an empty display column. Skipped.");
@@ -149,26 +185,105 @@ namespace Com.Pamcha.CodaSync {
                     continue;
                 }
 
-                string assetPath = $"{path}/{rows[i].Name}.asset";
-                instances[i] = AssetDatabase.LoadAssetAtPath(assetPath, objectType);
+                ScriptableObject instance = null;
 
-                if (instances[i] == null) {
-                    instances[i] = ScriptableObject.CreateInstance(objectType);
-                    AssetDatabase.CreateAsset(instances[i], assetPath);
-                    created++;
-                } else {
-                    // Capture the on-disk state before pass 2 overwrites the fields.
-                    beforeSnapshots[i] = EditorJsonUtility.ToJson(instances[i]);
+                if (!string.IsNullOrEmpty(rows[i].Id) && byId.TryGetValue(rows[i].Id, out ScriptableObject byIdMatch)) {
+                    instance = byIdMatch;
+
+                    // Row renamed in Coda: rename the asset instead of creating a duplicate
+                    string currentPath = AssetDatabase.GetAssetPath(instance);
+                    if (Path.GetFileNameWithoutExtension(currentPath) != rows[i].Name) {
+                        string error = AssetDatabase.RenameAsset(currentPath, rows[i].Name);
+                        if (string.IsNullOrEmpty(error)) {
+                            renamed++;
+                            report.renames.Add(new ImportReport.RenameInfo {
+                                tableName = structure.UnmodifiedName,
+                                oldName = Path.GetFileNameWithoutExtension(currentPath),
+                                newName = rows[i].Name
+                            });
+                        } else
+                            report.warnings.Add($"Table \"{structure.UnmodifiedName}\" \u2192 could not rename \"{Path.GetFileNameWithoutExtension(currentPath)}\" to \"{rows[i].Name}\": {error}. The asset keeps its old file name.");
+                    }
+                } else if (byName.TryGetValue(rows[i].Name, out ScriptableObject byNameMatch)) {
+                    // Migration fallback: pre-1.4 asset (or hand-made one at the right name) gets
+                    // adopted and stamped with the row id below.
+                    instance = byNameMatch;
+                    byName.Remove(rows[i].Name);
                 }
 
+                if (instance != null) {
+                    // Snapshot BEFORE stamping the id: on the first post-migration import the stamp
+                    // changes the serialization, so the asset is counted (and saved) as updated once.
+                    beforeSnapshots[i] = EditorJsonUtility.ToJson(instance);
+                    rowIdField?.SetValue(instance, rows[i].Id);
+                    matched.Add(instance);
+                    instances[i] = instance;
+                    instanceList.Add(instances[i]);
+                } else {
+                    toCreate.Add(i);
+                }
+            }
+
+            // Pass B: create assets for new rows, now that every rename has been applied.
+            foreach (int i in toCreate) {
+                string assetPath = $"{path}/{rows[i].Name}.asset";
+
+                // The target file can still be occupied by an asset of this type whose row was
+                // deleted in Coda (reported as orphaned below), or by an unrelated asset. Never
+                // overwrite it: skip with a warning instead.
+                if (AssetDatabase.LoadAssetAtPath(assetPath, typeof(UnityEngine.Object)) != null) {
+                    report.warnings.Add($"Table \"{structure.UnmodifiedName}\" \u2192 can't create \"{rows[i].Name}\": a file already exists at {assetPath} (likely an orphaned asset, see the orphan list). Skipped.");
+                    skipped++;
+                    continue;
+                }
+
+                instances[i] = ScriptableObject.CreateInstance(objectType);
+                rowIdField?.SetValue(instances[i], rows[i].Id);
+                AssetDatabase.CreateAsset(instances[i], assetPath);
+                created++;
                 instanceList.Add(instances[i]);
             }
 
+            // Orphan detection (report only, nothing is ever deleted here).
+            // Compare against the ids of ALL current rows, including skipped ones, so a skipped
+            // duplicate row doesn't flag its existing asset as orphaned.
+            HashSet<string> currentRowIds = new HashSet<string>();
+            for (int i = 0; i < rows.Length; i++) {
+                if (!string.IsNullOrEmpty(rows[i].Id))
+                    currentRowIds.Add(rows[i].Id);
+            }
+
+            foreach (var pair in byId) {
+                if (currentRowIds.Contains(pair.Key))
+                    continue;
+
+                report.orphans.Add(new ImportReport.OrphanInfo {
+                    tableName = structure.UnmodifiedName,
+                    assetName = pair.Value.name,
+                    assetPath = AssetDatabase.GetAssetPath(pair.Value),
+                    reason = ImportReport.OrphanReason.deletedRow
+                });
+            }
+
+            // Assets without an id that no current row adopted: hand-made / foreign
+            foreach (var pair in byName) {
+                if (matched.Contains(pair.Value))
+                    continue;
+
+                report.orphans.Add(new ImportReport.OrphanInfo {
+                    tableName = structure.UnmodifiedName,
+                    assetName = pair.Value.name,
+                    assetPath = AssetDatabase.GetAssetPath(pair.Value),
+                    reason = ImportReport.OrphanReason.unmanaged
+                });
+            }
+
             // The report entry (created/updated/unchanged/skipped) is added in SetAllFields, once the
-            // real diff is known. created and skipped are final here; carry them forward via state.
+            // real diff is known. created, skipped and renamed are final here; carry them via state.
             state = new TableImportState {
                 created = created,
                 skipped = skipped,
+                renamed = renamed,
                 beforeSnapshots = beforeSnapshots
             };
 
@@ -204,7 +319,7 @@ namespace Com.Pamcha.CodaSync {
                 }
 
                 // Pre-existing asset: diff the serialized state to tell updated from unchanged.
-                // Only mark dirty / save when something actually changed \u2014 this keeps the consumer's
+                // Only mark dirty / save when something actually changed: this keeps the consumer's
                 // git diff clean and avoids needless asset rewrites.
                 // Note: image fields are assigned asynchronously (LoadImage coroutine) after this
                 // snapshot, so a row whose only change is an image is currently seen as unchanged.
@@ -223,7 +338,8 @@ namespace Com.Pamcha.CodaSync {
                 created = state.created,
                 updated = updated,
                 unchanged = unchanged,
-                skipped = state.skipped
+                skipped = state.skipped,
+                renamed = state.renamed
             });
         }
 

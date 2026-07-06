@@ -221,6 +221,10 @@ using System.Collections.Generic;
 
 namespace {TableImporter.CodeNamespace} {{
     public class {structure.Name} : ScriptableObject {{{GetFields(structure)}
+
+        // Stable Coda row id (i-xxxx) this asset was generated from. Lets the importer track
+        // rows across renames and detect orphaned assets. Read/written by reflection.
+        [SerializeField, HideInInspector] private string __codaRowId;
     }}
 }}";
 

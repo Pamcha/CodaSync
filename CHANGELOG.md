@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-07-06
+### Added
+- **Stable row-id identity for generated assets**: every generated class now carries a hidden serialized `__codaRowId` field stamped with the stable Coda row id (`i-xxxx`). Existing assets are matched by id instead of file name. On the first import after upgrading, assets are adopted by their current name and stamped; they all show as `updated` once, then stabilize
+- **Renaming a row in Coda now renames the asset** instead of creating a duplicate and leaving the old file behind. Renames are listed in the import report: new "Renamed" section with old → new names, plus a per-table `renamed` counter
+- **Orphan detection in the import report** (detection only, the sync never deletes anything): assets whose row id no longer exists in Coda are listed as `Orphaned (row deleted in Coda)`; assets with no row id and no matching row are listed as `Unmanaged (not linked to any Coda row)` and will never be offered for cleanup. Note: assets generated before 1.4.0 whose row was already deleted carry no id and appear as Unmanaged; clean those manually once
+- New rows are created only after all renames are applied, and never overwrite an existing file: a name collision (e.g. with an orphaned asset) is skipped with a warning
+
 ## [1.3.1] - 2026-07-06
 ### Fixed
 - **Import crash on `Curl error 61` (brotli)**: Coda's CDN sometimes answers with brotli compression, which Unity's libcurl cannot decode, leaving an empty response body that crashed the import with `JsonSerializationException`. All API requests now pin `Accept-Encoding: gzip, deflate` so the CDN only replies with encodings Unity can decode

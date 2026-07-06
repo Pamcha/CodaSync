@@ -142,11 +142,35 @@ namespace Com.Pamcha.CodaSync {
             public int updated;
             public int unchanged;
             public int skipped;
+            public int renamed;
+        }
+
+        public enum OrphanReason {
+            // The asset carries a row id that no longer exists in Coda: safe cleanup candidate
+            deletedRow,
+            // The asset carries no row id and matches no current row name: hand-made or foreign,
+            // never deleted automatically
+            unmanaged
+        }
+
+        public struct OrphanInfo {
+            public string tableName;
+            public string assetName;
+            public string assetPath;
+            public OrphanReason reason;
+        }
+
+        public struct RenameInfo {
+            public string tableName;
+            public string oldName;
+            public string newName;
         }
 
         public List<InstanceInfo> instances = new List<InstanceInfo>();
         public List<LookupFailure> lookupFailures = new List<LookupFailure>();
         public List<string> warnings = new List<string>();
+        public List<OrphanInfo> orphans = new List<OrphanInfo>();
+        public List<RenameInfo> renames = new List<RenameInfo>();
 
         public void LogToConsole() {
             // Header
@@ -170,8 +194,28 @@ namespace Com.Pamcha.CodaSync {
             foreach (var info in instances) {
                 string detail = $"      \u2514 {info.tableName}: {info.created} created, {info.updated} updated";
                 if (info.unchanged > 0) detail += $", {info.unchanged} unchanged";
+                if (info.renamed > 0) detail += $", {info.renamed} renamed";
                 if (info.skipped > 0) detail += $", {info.skipped} skipped";
                 Debug.Log($"<color=#AAAAAA>{detail}</color>");
+            }
+
+            // Renames (row renamed in Coda, asset file renamed to follow)
+            if (renames.Count > 0) {
+                Debug.Log($"<color=#5B9BD5>    <b>Renamed:</b> {renames.Count}</color>");
+                foreach (var rename in renames) {
+                    Debug.Log($"<color=#5B9BD5>      └ {rename.tableName}: \"{rename.oldName}\" → \"{rename.newName}\"</color>");
+                }
+            }
+
+            // Orphaned / unmanaged assets (detection only, never deleted by the sync)
+            if (orphans.Count > 0) {
+                Debug.Log($"<color=#E8A838>    <b>Orphaned assets:</b> {orphans.Count} (nothing was deleted)</color>");
+                foreach (var orphan in orphans) {
+                    string label = orphan.reason == OrphanReason.deletedRow
+                        ? $"\ud83d\uddd1 Orphaned: \"{orphan.assetName}\" (row deleted in Coda)"
+                        : $"\u2753 Unmanaged: \"{orphan.assetName}\" (not linked to any Coda row)";
+                    Debug.Log($"<color=#E8A838>      \u2514 {orphan.tableName}: {label} at {orphan.assetPath}</color>");
+                }
             }
 
             // Lookup failures
