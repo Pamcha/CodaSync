@@ -83,11 +83,16 @@ namespace Com.Pamcha.CodaSync {
         private UnityWebRequest CreateBaseGetRequest() {
             UnityWebRequest req = UnityWebRequest.Get(_apiBasePath);
             req.SetRequestHeader("Authorization", $"Bearer {_apiToken}");
+            // Pin encodings libcurl can decode: without this, Coda's CDN may answer in brotli (br),
+            // which Unity's libcurl doesn't support → "Curl error 61" and an empty response body.
+            req.SetRequestHeader("Accept-Encoding", "gzip, deflate");
             return req;
         }
         private UnityWebRequest CreateBasePostRequest(string data) {
             UnityWebRequest req = UnityWebRequest.PostWwwForm(_apiBasePath, "");
             req.SetRequestHeader("Authorization", $"Bearer {_apiToken}");
+            // Same brotli pinning as CreateBaseGetRequest (Curl error 61)
+            req.SetRequestHeader("Accept-Encoding", "gzip, deflate");
 
             req.uploadHandler = new UploadHandlerRaw(UTF8.GetBytes(data)) {
                 contentType = "application/json"

@@ -20,6 +20,10 @@ namespace Com.Pamcha.CodaSync {
         [HideInInspector] public List<TableSelection> tableSelection;
         public bool CanDisplayTableSelection { get => docIdFound && requester != null && tableSelection != null; }
 
+        // Doc id of the last successful table-list fetch. Persisted so OnValidate can tell a real
+        // document change apart from the many editor events that also fire it (see OnValidate).
+        [SerializeField, HideInInspector] private string lastTableListDocId;
+
         public static string CodeNamespace { get; private set; }
         private const string editorPrefKeyShouldCreateInstances = "Com.Pamcha.CodaImporter.ShouldCreateInstances";
         private const string editorPrefKeyTablesStructure = "Com.Pamcha.CodaImporter.TablesStructure";
@@ -30,19 +34,28 @@ namespace Com.Pamcha.CodaSync {
         protected override void OnValidate() {
             base.OnValidate();
 
-            if (requester != null && docIdFound) {
-                // Don't fire the network request synchronously here: Unity calls OnValidate on every
-                // re-import (script reload, entering Play mode, the sync rewriting lastSyncDateString,
-                // AssetDatabase.Refresh) — potentially several times per frame. Debounce through
-                // delayCall so we issue at most one request once the current event burst settles.
-                EditorApplication.delayCall -= DeferredTableListRefresh;
-                EditorApplication.delayCall += DeferredTableListRefresh;
-            }
+            // OnValidate fires on many events unrelated to a user edit (script reload,
+            // AssetDatabase.Refresh, play mode transitions, editor focus regain, the sync itself
+            // rewriting lastSyncDateString...), which used to trigger ghost table-list requests.
+            // Only auto-refresh here when the target document actually changed; opening the
+            // inspector triggers its own refresh (TableImportEditor.OnEnable).
+            if (requester != null && docIdFound && documentId != lastTableListDocId)
+                ScheduleTableListRefresh();
 
             if (EditorPrefs.GetBool(editorPrefKeyShouldCreateInstances, true)) {
                 EditorPrefs.SetBool(editorPrefKeyShouldCreateInstances, false);
                 CreateInstances();
             }
+        }
+
+        /// <summary>
+        /// Debounced table-list refresh. OnValidate and the inspector can both request a refresh
+        /// several times per frame, so every request is routed through a single delayCall: at most
+        /// one network call once the current event burst settles.
+        /// </summary>
+        public void ScheduleTableListRefresh() {
+            EditorApplication.delayCall -= DeferredTableListRefresh;
+            EditorApplication.delayCall += DeferredTableListRefresh;
         }
 
         private void DeferredTableListRefresh() {
@@ -83,6 +96,11 @@ namespace Com.Pamcha.CodaSync {
             }
 
             tableSelection = newTableSelection;
+
+            // Remember which document this list belongs to, so OnValidate only re-fetches
+            // when the URL actually points somewhere else.
+            lastTableListDocId = documentId;
+            EditorUtility.SetDirty(this);
 
             EditorUtility.DisplayProgressBar("Coda Table Import", "Requesting tables list", 1);
             EditorUtility.ClearProgressBar();
@@ -231,14 +249,22 @@ namespace Com.Pamcha.CodaSync {
             isCancelled = false;
 
             List<TableDescriptionData> tables = new List<TableDescriptionData>();
+            int typeTableCount = 0;
             for (int i = 0; i < tableSelection.Count; i++) {
                 // Always include Type Tables (Sprite, AudioClip, etc.) so that asset references
                 // can be resolved even when the user imports only a subset of tables.
-                if (tableSelection[i].selected || TypeTables.Contains(tableSelection[i].tableDescription.name))
+                bool isTypeTable = TypeTables.Contains(tableSelection[i].tableDescription.name);
+                if (tableSelection[i].selected || isTypeTable) {
                     tables.Add(tableSelection[i].tableDescription);
+                    if (isTypeTable) typeTableCount++;
+                }
             }
 
-            if (EditorUtility.DisplayCancelableProgressBar("Coda Table Import", $"Fetching structure for {tables.Count} selected tables...", 0)) {
+            // Only report the tables the user actually ticked: type tables are hidden from the
+            // UI, and counting them here ("8 selected" when the user ticked 3) reads like a bug.
+            int selectedCount = tables.Count - typeTableCount;
+
+            if (EditorUtility.DisplayCancelableProgressBar("Coda Table Import", $"Fetching structure for {selectedCount} selected tables...", 0)) {
                 CancelImport();
                 return;
             }
@@ -341,7 +367,15 @@ namespace Com.Pamcha.CodaSync {
             TableRow[][] tablesRows = new TableRow[dataRequests.Length][];
 
             for (int i = 0; i < dataRequests.Length; i++) {
-                tablesRows[i] = JsonConvert.DeserializeObject<TableRowResponse>(dataRequests[i].downloadHandler.text).items;
+                // Abort rather than skip: creating instances from a partial row set would leave
+                // lookups/databases inconsistent with what's actually in Coda.
+                if (!TryGetResponseJson(dataRequests[i], out string json)) {
+                    EditorUtility.ClearProgressBar();
+                    Debug.LogWarning($"⚠️ <b>[CodaSync]</b> Empty/failed row data response for table \"{structures[i].UnmodifiedName}\": {dataRequests[i].error ?? "no content"}. Import aborted.");
+                    return;
+                }
+
+                tablesRows[i] = JsonConvert.DeserializeObject<TableRowResponse>(json).items;
             }
 
             if (EditorUtility.DisplayCancelableProgressBar("Coda Table Import", "Creating ScriptableObject instances...", .85f)) {

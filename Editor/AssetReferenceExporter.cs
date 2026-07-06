@@ -192,7 +192,7 @@ namespace Com.Pamcha.CodaSync {
                         continue;
 
                     if (mainAsset.GetType() == typeof(GameObject)) {
-                        // Don't explore recursively — just add the prefab itself
+                        // Don't explore recursively, just add the prefab itself
                         assets.Add(mainAsset);
                     } else {
                         Object[] allAssets = AssetDatabase.LoadAllAssetsAtPath(assetPath);

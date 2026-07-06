@@ -15,6 +15,14 @@ namespace Com.Pamcha.CodaSync {
             script = (TableImporter)target;
         }
 
+        private void OnEnable() {
+            script = (TableImporter)target;
+            // Refresh the table list when the importer is actually being inspected. This replaces
+            // the old OnValidate-driven refresh, which also fired on events unrelated to the user
+            // looking at the asset (script reload, AssetDatabase.Refresh, focus regain...).
+            script.ScheduleTableListRefresh();
+        }
+
         public override void OnInspectorGUI() {
             base.OnInspectorGUI();
 
@@ -90,7 +98,7 @@ namespace Com.Pamcha.CodaSync {
             EditorGUILayout.EndHorizontal();
             EditorGUILayout.EndVertical();
 
-            // Import + Validate Names buttons — side by side (2/3 + 1/3)
+            // Import + Validate Names buttons, side by side (2/3 + 1/3)
             EditorGUILayout.Space(15);
 
             Color previousBg = GUI.backgroundColor;
@@ -125,7 +133,7 @@ namespace Com.Pamcha.CodaSync {
 
         private void SetTableSelectionState(bool state) {
             for (int i = 0; i < script.tableSelection.Count; i++) {
-                // Don't deselect Type Tables — they're hidden from the UI and must stay selected
+                // Don't deselect Type Tables: they're hidden from the UI and must stay selected
                 // so that asset references (Sprite, AudioClip, etc.) are always resolved during import.
                 if (!state && ImporterExporter.TypeTables.Contains(script.tableSelection[i].tableDescription.name))
                     continue;

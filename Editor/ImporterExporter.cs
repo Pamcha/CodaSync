@@ -50,16 +50,29 @@ namespace Com.Pamcha.CodaSync {
         }
 
         private void OnTableListResponse(UnityWebRequest req, Action<TableDescriptionData[]> callback) {
-            // TableListResponse is a (non-nullable) struct, so DeserializeObject throws on an empty
-            // body instead of returning null. An empty/failed response can happen on rate-limit (429),
-            // timeout, token cooldown or a network hiccup — guard so it never becomes an exception.
-            if (req.result != UnityWebRequest.Result.Success || string.IsNullOrEmpty(req.downloadHandler.text)) {
+            if (!TryGetResponseJson(req, out string jsonString)) {
+                EditorUtility.ClearProgressBar();
                 Debug.LogWarning($"⚠️ <b>[CodaSync]</b> Empty/failed response from Coda API: {req.error ?? "no content"}");
                 return;
             }
 
-            string jsonString = req.downloadHandler.text;
             callback(JsonConvert.DeserializeObject<TableListResponse>(jsonString).items);
+        }
+
+        /// <summary>
+        /// Guard shared by every response handler: response structs are non-nullable, so
+        /// DeserializeObject throws on an empty body instead of returning null. An empty/failed
+        /// response can happen on rate-limit (429), timeout, token cooldown, a network hiccup,
+        /// or an unsupported content encoding (Curl error 61).
+        /// </summary>
+        protected static bool TryGetResponseJson(UnityWebRequest req, out string json) {
+            if (req.result != UnityWebRequest.Result.Success || string.IsNullOrEmpty(req.downloadHandler.text)) {
+                json = null;
+                return false;
+            }
+
+            json = req.downloadHandler.text;
+            return true;
         }
 
 
@@ -79,6 +92,16 @@ namespace Com.Pamcha.CodaSync {
         }
 
         private void OnTableStructureResponse(UnityWebRequest[] tableRequests, TableDescriptionData[] tableList, Action<TableStructure[]> callback) {
+            // Abort on the first failed/empty response rather than skipping the table: generating
+            // classes/instances from a partial table set could leave lookups pointing at nothing.
+            for (int i = 0; i < tableRequests.Length; i++) {
+                if (!TryGetResponseJson(tableRequests[i], out _)) {
+                    EditorUtility.ClearProgressBar();
+                    Debug.LogWarning($"⚠️ <b>[CodaSync]</b> Empty/failed structure response for table \"{tableList[i].name}\": {tableRequests[i].error ?? "no content"}. Operation aborted.");
+                    return;
+                }
+            }
+
             TableStructure[] structures = new TableStructure[tableRequests.Length];
 
             for (int i = 0; i < structures.Length; i++) {
