@@ -132,13 +132,21 @@ namespace Com.Pamcha.CodaSync {
 
             // Index the table's existing assets: by row id, and by file name for those without an
             // id yet (pre-1.4 assets to migrate, or hand-made ones).
+            //
+            // The folder is enumerated directly instead of through AssetDatabase.FindAssets("t:Name"):
+            // that filter only takes a short type name, so in a project that also holds another class
+            // with the same name (say a "Prop" MonoBehaviour alongside the generated "Prop"
+            // ScriptableObject) it resolves to the wrong script and returns nothing. Every existing
+            // asset would then be missed, its row treated as new, and its re-creation refused by the
+            // file-already-exists guard in pass B, leaving the table's database list empty.
             Dictionary<string, ScriptableObject> byId = new Dictionary<string, ScriptableObject>();
             Dictionary<string, ScriptableObject> byName = new Dictionary<string, ScriptableObject>();
-            string[] existingGuids = AssetDatabase.FindAssets($"t:{structure.Name}", new[] { path });
-            foreach (string guid in existingGuids) {
-                string existingPath = AssetDatabase.GUIDToAssetPath(guid);
+            string[] existingFiles = Directory.GetFiles(path, "*.asset", SearchOption.AllDirectories);
+            foreach (string file in existingFiles) {
+                // GetFiles joins with a backslash on Windows, AssetDatabase only accepts forward slashes
+                string existingPath = file.Replace('\\', '/');
                 ScriptableObject existing = AssetDatabase.LoadAssetAtPath(existingPath, objectType) as ScriptableObject;
-                // FindAssets t: matches by short type name; make sure it really is this table's type
+                // Filters out the _X_Database asset and any foreign asset sharing the folder
                 if (existing == null || existing.GetType() != objectType)
                     continue;
 

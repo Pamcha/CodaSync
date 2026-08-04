@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-08-04
+### Fixed
+- **Table wiped when its class name collides with another class in the project**: existing assets were looked up with `AssetDatabase.FindAssets("t:{Table}")`, whose type filter only takes a short type name. In a project that also holds another class with the same name (e.g. a `Prop` MonoBehaviour alongside the generated `Prop` ScriptableObject), the filter resolved to the wrong script and returned nothing: every existing asset was missed, every row was treated as new, its re-creation was refused by the file-already-exists guard (`can't create "x": a file already exists at ...`), and the table's `_X_Database` list came out empty. The table folder is now enumerated directly, so asset identity no longer depends on the editor's search index
+
+### Removed
+- `AssetReferenceExporter.FindAssetsByType<T>()`, unused inside the package and carrying the same short-type-name search flaw
+
 ## [1.4.0] - 2026-07-06
 ### Added
 - **Stable row-id identity for generated assets**: every generated class now carries a hidden serialized `__codaRowId` field stamped with the stable Coda row id (`i-xxxx`). Existing assets are matched by id instead of file name. On the first import after upgrading, assets are adopted by their current name and stamped; they all show as `updated` once, then stabilize
