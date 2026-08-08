@@ -20,6 +20,34 @@ namespace Com.Pamcha.CodaSync {
         [HideInInspector] public List<TableSelection> tableSelection;
         public bool CanDisplayTableSelection { get => docIdFound && requester != null && tableSelection != null; }
 
+        // Tables the user chose to hide from the import list: Coda views, or tables that only exist
+        // to feed a select somewhere in the doc. Stored by table id rather than by name, so hiding
+        // survives a rename in Coda and lines up with the id-based re-pairing in OnUpdateTableList.
+        [SerializeField, HideInInspector] private List<string> ignoredTableIds = new List<string>();
+        public IReadOnlyList<string> IgnoredTableIds => ignoredTableIds;
+
+        /// <summary>
+        /// Row ids seen in a table at the last sync. An existing asset whose id is missing from this
+        /// set belonged to a row that no longer exists in Coda.
+        /// </summary>
+        [System.Serializable]
+        public class SyncedTableRowIds {
+            public string tableName;      // Coda table name, as displayed in the doc
+            public string generatedName;  // sanitized name: instance folder and generated class
+            public List<string> rowIds = new List<string>();
+        }
+
+        // Cached so the orphan cleanup window can recompute what is orphaned without hitting the
+        // network: it opens on this data, and only calls Coda when the user asks for a re-fetch.
+        // Refreshed at the end of every import, for the tables that were part of it.
+        [SerializeField, HideInInspector] private List<SyncedTableRowIds> syncedRowIds = new List<SyncedTableRowIds>();
+        [SerializeField, HideInInspector] private string rowIdCacheDateString;
+
+        public IReadOnlyList<SyncedTableRowIds> SyncedRowIds => syncedRowIds;
+        public string RowIdCacheDateString => rowIdCacheDateString;
+        public string InstancesPath => $"{GetPath()}/Resources";
+        public string CodeNamespaceSetting => codeNamespace;
+
         // Doc id of the last successful table-list fetch. Persisted so OnValidate can tell a real
         // document change apart from the many editor events that also fire it (see OnValidate).
         [SerializeField, HideInInspector] private string lastTableListDocId;
@@ -106,6 +134,133 @@ namespace Com.Pamcha.CodaSync {
             EditorUtility.ClearProgressBar();
         }
 
+        #region RowIdCache
+        /// <summary>
+        /// Records the row ids of every table that took part in this import, so the orphan cleanup
+        /// window can tell a deleted row from a live one without going back to the network. Tables
+        /// left out of the import keep the ids of the last one they were in.
+        /// </summary>
+        private void CacheSyncedRowIds(TableStructure[] structures, TableRow[][] tablesRows) {
+            for (int i = 0; i < structures.Length && i < tablesRows.Length; i++) {
+                if (TypeTables.Contains(structures[i].UnmodifiedName))
+                    continue;
+
+                SyncedTableRowIds cached = syncedRowIds.Find(t => t.generatedName == structures[i].Name);
+                if (cached == null) {
+                    cached = new SyncedTableRowIds();
+                    syncedRowIds.Add(cached);
+                }
+
+                cached.tableName = structures[i].UnmodifiedName;
+                cached.generatedName = structures[i].Name;
+                cached.rowIds.Clear();
+
+                for (int j = 0; j < tablesRows[i].Length; j++) {
+                    if (!string.IsNullOrEmpty(tablesRows[i][j].Id))
+                        cached.rowIds.Add(tablesRows[i][j].Id);
+                }
+            }
+
+            rowIdCacheDateString = $"{System.DateTime.UtcNow:R}";
+        }
+
+        /// <summary>
+        /// Re-fetches the row ids of the already-cached tables from Coda without running an import.
+        /// Lets the cleanup window check its verdict against the live document when its cache is old.
+        /// </summary>
+        public void RefreshRowIdCache(System.Action onDone) {
+            documentId = GetDocumentIdFromURL();
+
+            if (requester == null || !docIdFound) {
+                EditorUtility.DisplayDialog("Coda Sync", "Can't reach Coda: check the Requester and the document URL on this importer.", "OK");
+                onDone?.Invoke();
+                return;
+            }
+
+            if (syncedRowIds.Count == 0) {
+                EditorUtility.DisplayDialog("Coda Sync", "No table cached yet. Run an import first.", "OK");
+                onDone?.Invoke();
+                return;
+            }
+
+            string[] names = new string[syncedRowIds.Count];
+            for (int i = 0; i < names.Length; i++) {
+                names[i] = syncedRowIds[i].tableName;
+            }
+
+            EditorUtility.DisplayProgressBar("Coda Sync", $"Re-fetching row ids ({names.Length} tables)...", 0f);
+            requester.GetTablesData(documentId, names, (requests) => OnRowIdRefreshResponse(requests, onDone));
+        }
+
+        private void OnRowIdRefreshResponse(UnityWebRequest[] dataRequests, System.Action onDone) {
+            EditorUtility.ClearProgressBar();
+
+            // Abort on the first failed response instead of caching a partial answer: a table whose
+            // rows didn't come back would have all of its assets flagged as orphaned, which is
+            // exactly the mistake this window must never make. The old cache is left untouched.
+            for (int i = 0; i < dataRequests.Length; i++) {
+                if (!TryGetResponseJson(dataRequests[i], out _)) {
+                    string tableName = i < syncedRowIds.Count ? syncedRowIds[i].tableName : "unknown";
+                    Debug.LogWarning($"⚠️ <b>[CodaSync]</b> Empty/failed row data response for table \"{tableName}\": {dataRequests[i].error ?? "no content"}. Row ids were left as they were (the table may have been deleted or renamed in Coda).");
+                    onDone?.Invoke();
+                    return;
+                }
+            }
+
+            for (int i = 0; i < dataRequests.Length && i < syncedRowIds.Count; i++) {
+                TableRow[] rows = JsonConvert.DeserializeObject<TableRowResponse>(dataRequests[i].downloadHandler.text).items;
+
+                syncedRowIds[i].rowIds.Clear();
+                for (int j = 0; j < rows.Length; j++) {
+                    if (!string.IsNullOrEmpty(rows[j].Id))
+                        syncedRowIds[i].rowIds.Add(rows[j].Id);
+                }
+            }
+
+            rowIdCacheDateString = $"{System.DateTime.UtcNow:R}";
+            EditorUtility.SetDirty(this);
+            onDone?.Invoke();
+        }
+        #endregion
+
+        #region HiddenTables
+        /// <summary>
+        /// True when the table was hidden from the import list by the user.
+        /// </summary>
+        public bool IsTableIgnored(string tableId) {
+            return !string.IsNullOrEmpty(tableId) && ignoredTableIds.Contains(tableId);
+        }
+
+        /// <summary>
+        /// Hides a table from the import list. Hiding also deselects it, so a table that was ticked
+        /// before being hidden can't slip into the next import. Type Tables can't be hidden: they
+        /// are already filtered out of the UI and must stay selected to resolve asset references.
+        /// </summary>
+        public void HideTable(TableSelection selection) {
+            if (selection == null || TypeTables.Contains(selection.tableDescription.name))
+                return;
+
+            string tableId = selection.tableDescription.id;
+            if (string.IsNullOrEmpty(tableId)) return;
+
+            if (!ignoredTableIds.Contains(tableId))
+                ignoredTableIds.Add(tableId);
+
+            selection.selected = false;
+            EditorUtility.SetDirty(this);
+        }
+
+        /// <summary>
+        /// Puts a hidden table back in the import list, deselected. Takes an id rather than a
+        /// TableSelection so a table hidden then deleted in Coda can still be cleared from the list.
+        /// </summary>
+        public void ShowTable(string tableId) {
+            if (!ignoredTableIds.Remove(tableId)) return;
+
+            EditorUtility.SetDirty(this);
+        }
+        #endregion
+
         #region CheckNames
         /// <summary>
         /// Fetches table structures and row data for selected tables, then logs a full name validation report.
@@ -113,7 +268,7 @@ namespace Com.Pamcha.CodaSync {
         public void CheckNames() {
             List<TableDescriptionData> tables = new List<TableDescriptionData>();
             for (int i = 0; i < tableSelection.Count; i++) {
-                if (tableSelection[i].selected)
+                if (tableSelection[i].selected && !IsTableIgnored(tableSelection[i].tableDescription.id))
                     tables.Add(tableSelection[i].tableDescription);
             }
 
@@ -254,7 +409,10 @@ namespace Com.Pamcha.CodaSync {
                 // Always include Type Tables (Sprite, AudioClip, etc.) so that asset references
                 // can be resolved even when the user imports only a subset of tables.
                 bool isTypeTable = TypeTables.Contains(tableSelection[i].tableDescription.name);
-                if (tableSelection[i].selected || isTypeTable) {
+                // Hiding a table already deselects it; re-checking here means no inconsistent state
+                // can ever send a hidden table to import.
+                bool isSelected = tableSelection[i].selected && !IsTableIgnored(tableSelection[i].tableDescription.id);
+                if (isSelected || isTypeTable) {
                     tables.Add(tableSelection[i].tableDescription);
                     if (isTypeTable) typeTableCount++;
                 }
@@ -386,6 +544,7 @@ namespace Com.Pamcha.CodaSync {
             ImportReport report = new ImportReport();
             BuildClassChangeReport(structures, report);
             InstanceGenerator.CreateAllInstances(structures, tablesRows, instancesPath, report);
+            CacheSyncedRowIds(structures, tablesRows);
 
             AssetDatabase.Refresh();
 

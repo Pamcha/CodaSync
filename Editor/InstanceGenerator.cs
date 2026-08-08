@@ -113,7 +113,7 @@ namespace Com.Pamcha.CodaSync {
         // Name of the private serialized row-id field emitted on every generated class (see
         // CodeGenerator). The double underscore avoids collisions with sanitized column names,
         // which are only ever prefixed with a single one.
-        private const string RowIdFieldName = "__codaRowId";
+        public const string RowIdFieldName = "__codaRowId";
 
         private static dynamic[] CreateInstances(TableStructure structure, TableRow[] rows, string path, out TableImportState state) {
             ScriptableObject database = ScriptableObject.CreateInstance($"{structure.Name}_DB");
