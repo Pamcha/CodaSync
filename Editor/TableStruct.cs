@@ -166,11 +166,40 @@ namespace Com.Pamcha.CodaSync {
             public string newName;
         }
 
+        /// <summary>
+        /// A table whose generated class no longer matches the schema its assets on disk were written
+        /// with, so every asset of that table was rewritten. A class rather than a struct: the rewritten
+        /// count is only known once the instances have been written, and is filled in afterwards.
+        /// </summary>
+        public class SchemaChangeInfo {
+            public string tableName;
+            // false when no baseline was stored for this table, so the whole table is rewritten without
+            // a field level diff to show.
+            public bool baselineKnown;
+            public List<string> added = new List<string>();
+            public List<string> removed = new List<string>();
+            public int rewritten;
+        }
+
         public List<InstanceInfo> instances = new List<InstanceInfo>();
+        public List<SchemaChangeInfo> schemaChanges = new List<SchemaChangeInfo>();
         public List<LookupFailure> lookupFailures = new List<LookupFailure>();
         public List<string> warnings = new List<string>();
         public List<OrphanInfo> orphans = new List<OrphanInfo>();
         public List<RenameInfo> renames = new List<RenameInfo>();
+
+        /// <summary>
+        /// Field signatures are stored as "name:Type.FullName" so a retyped column reads as a change.
+        /// Only the name is worth showing in the console.
+        /// </summary>
+        private static List<string> StripTypes(List<string> signatures) {
+            List<string> names = new List<string>();
+            foreach (string signature in signatures) {
+                int separator = signature.IndexOf(':');
+                names.Add(separator > 0 ? signature.Substring(0, separator) : signature);
+            }
+            return names;
+        }
 
         public void LogToConsole() {
             // Header
@@ -197,6 +226,26 @@ namespace Com.Pamcha.CodaSync {
                 if (info.renamed > 0) detail += $", {info.renamed} renamed";
                 if (info.skipped > 0) detail += $", {info.skipped} skipped";
                 Debug.Log($"<color=#AAAAAA>{detail}</color>");
+            }
+
+            // Schema changes (generated class changed, so the whole table was rewritten)
+            if (schemaChanges.Count > 0) {
+                Debug.Log($"<color=#5B9BD5>    <b>Schema changed:</b> {schemaChanges.Count} table(s) rewritten</color>");
+                foreach (var change in schemaChanges) {
+                    string detail;
+                    if (!change.baselineKnown) {
+                        detail = "no known schema for the assets on disk, all rewritten";
+                    } else {
+                        detail = "";
+                        if (change.added.Count > 0)
+                            detail += $"+{change.added.Count} ({string.Join(", ", StripTypes(change.added))})";
+                        if (change.removed.Count > 0) {
+                            if (detail.Length > 0) detail += ", ";
+                            detail += $"-{change.removed.Count} ({string.Join(", ", StripTypes(change.removed))})";
+                        }
+                    }
+                    Debug.Log($"<color=#5B9BD5>      \u2514 {change.tableName}: {detail} \u2192 {change.rewritten} asset(s) rewritten</color>");
+                }
             }
 
             // Renames (row renamed in Coda, asset file renamed to follow)

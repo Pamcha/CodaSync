@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using Unity.Plastic.Newtonsoft.Json;
 using UnityEditor;
 using UnityEditor.Compilation;
@@ -43,6 +44,23 @@ namespace Com.Pamcha.CodaSync {
         [SerializeField, HideInInspector] private List<SyncedTableRowIds> syncedRowIds = new List<SyncedTableRowIds>();
         [SerializeField, HideInInspector] private string rowIdCacheDateString;
 
+        /// <summary>
+        /// Field signature of a table's generated class, as of the last import that actually wrote its
+        /// assets. Compared against the freshly compiled class to tell whether the assets on disk still
+        /// carry the current schema.
+        /// </summary>
+        [System.Serializable]
+        public class SyncedTableSchema {
+            public string generatedName;                      // sanitized name: instance folder and generated class
+            public List<string> fields = new List<string>();  // "name:Type.FullName", sorted
+        }
+
+        // Schema baseline per table, stored on the asset so it is committed with the project and shared
+        // by the team. Only advanced once the assets have actually been rewritten (see
+        // CacheSyncedSchemas), so an import that dies between code generation and instance creation
+        // leaves it alone and the next import redoes the work instead of baking the drift in.
+        [SerializeField, HideInInspector] private List<SyncedTableSchema> syncedSchemas = new List<SyncedTableSchema>();
+
         public IReadOnlyList<SyncedTableRowIds> SyncedRowIds => syncedRowIds;
         public string RowIdCacheDateString => rowIdCacheDateString;
         public string InstancesPath => $"{GetPath()}/Resources";
@@ -55,7 +73,6 @@ namespace Com.Pamcha.CodaSync {
         public static string CodeNamespace { get; private set; }
         private const string editorPrefKeyShouldCreateInstances = "Com.Pamcha.CodaImporter.ShouldCreateInstances";
         private const string editorPrefKeyTablesStructure = "Com.Pamcha.CodaImporter.TablesStructure";
-        private const string editorPrefKeyPreviousFields = "Com.Pamcha.CodaImporter.PreviousFields";
 
         private static bool isCancelled = false;
 
@@ -444,9 +461,6 @@ namespace Com.Pamcha.CodaSync {
 
             CodeNamespace = codeNamespace;
 
-            // Snapshot existing fields before code generation for the import report
-            SnapshotExistingFields(tableList);
-
             CodeFiles[] codes = CodeGenerator.GetCodeFromTableStructures(tableList);
 
             for (int i = 0; i < tableList.Length; i++) {
@@ -542,9 +556,10 @@ namespace Com.Pamcha.CodaSync {
             }
 
             ImportReport report = new ImportReport();
-            BuildClassChangeReport(structures, report);
-            InstanceGenerator.CreateAllInstances(structures, tablesRows, instancesPath, report);
+            HashSet<string> tablesToRewrite = DiffTableSchemas(structures, report);
+            InstanceGenerator.CreateAllInstances(structures, tablesRows, instancesPath, report, tablesToRewrite);
             CacheSyncedRowIds(structures, tablesRows);
+            CacheSyncedSchemas(structures);
 
             AssetDatabase.Refresh();
 
@@ -554,85 +569,146 @@ namespace Com.Pamcha.CodaSync {
             lastSyncDateString = $"{System.DateTime.UtcNow:R}";
             lastSyncLocalDateString = lastSyncDateString;
             EditorUtility.SetDirty(this);
+            // Flush now rather than waiting for the user to save the project. The schema baseline is
+            // what tells the next import whether the assets on disk still match their class: left in
+            // memory, it dies with the editor session and the next import rewrites every table again.
+            // The row id cache and the sync dates ride along.
+            AssetDatabase.SaveAssetIfDirty(this);
         }
 
         /// <summary>
-        /// Saves existing field names per table type to EditorPrefs so we can compare after recompilation.
+        /// Resolves a table's generated class in the currently loaded assemblies. Returns null when the
+        /// table has never been generated, or when the namespace setting changed.
         /// </summary>
-        private void SnapshotExistingFields(TableStructure[] tableList) {
-            Dictionary<string, List<string>> snapshot = new Dictionary<string, List<string>>();
+        private System.Type FindGeneratedType(string sanitizedTableName) {
+            string fullTypeName = $"{codeNamespace}.{sanitizedTableName}";
 
-            foreach (var table in tableList) {
-                if (TypeTables.Contains(table.UnmodifiedName))
-                    continue;
-
-                string fullTypeName = $"{codeNamespace}.{table.Name}";
-                System.Type existingType = null;
-                foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies()) {
-                    existingType = assembly.GetType(fullTypeName);
-                    if (existingType != null) break;
-                }
-
-                if (existingType != null) {
-                    var fields = existingType.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-                    List<string> fieldNames = new List<string>();
-                    foreach (var f in fields)
-                        fieldNames.Add(f.Name);
-                    snapshot[table.Name] = fieldNames;
-                }
+            foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies()) {
+                System.Type type = assembly.GetType(fullTypeName);
+                if (type != null) return type;
             }
 
-            EditorPrefs.SetString(editorPrefKeyPreviousFields, JsonConvert.SerializeObject(snapshot));
+            return null;
         }
 
         /// <summary>
-        /// Compares new columns against the snapshot taken before code generation,
-        /// and adds class change info to the report.
+        /// Signature of everything Unity serializes on a generated class: public fields, plus private
+        /// ones carrying [SerializeField], which is how __codaRowId is emitted. Both the name and the
+        /// type are included, so a retyped column, which keeps its name, still reads as a schema change.
+        /// Sorted, so the comparison does not depend on the order reflection returns fields in.
         /// </summary>
-        private static void BuildClassChangeReport(TableStructure[] structures, ImportReport report) {
-            string json = EditorPrefs.GetString(editorPrefKeyPreviousFields, "{}");
-            Dictionary<string, List<string>> previousFields = JsonConvert.DeserializeObject<Dictionary<string, List<string>>>(json);
+        private static List<string> GetSchemaSignature(System.Type type) {
+            List<string> signature = new List<string>();
+            FieldInfo[] fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+
+            foreach (FieldInfo field in fields) {
+                if (field.IsNotSerialized)
+                    continue;
+                if (!field.IsPublic && !field.IsDefined(typeof(SerializeField), true))
+                    continue;
+
+                signature.Add($"{field.Name}:{field.FieldType.FullName}");
+            }
+
+            signature.Sort(System.StringComparer.Ordinal);
+            return signature;
+        }
+
+        /// <summary>
+        /// Compares each table's freshly compiled class against the schema baseline stored on this
+        /// importer, fills the import report, and returns the tables whose assets must ALL be rewritten.
+        ///
+        /// Why this matters: a key absent from an asset's YAML does not fall back to the Unity default
+        /// for its type, it stays at the C# default, so a string field added to the class reads as null
+        /// rather than "" on every asset that was not rewritten. The row level diff in
+        /// InstanceGenerator.SetAllFields cannot catch that: it compares two in-memory objects under the
+        /// same current class, the YAML on disk never enters the comparison.
+        ///
+        /// The comparison is reflection against reflection, the same vocabulary on both sides, since the
+        /// baseline was itself written from a generated type. Comparing the class against the Coda
+        /// columns instead would need the column to C# type mapping that lives in CodeGenerator, and
+        /// would report the generated __codaRowId as a removed field on every table.
+        ///
+        /// Neither the mtime nor the hash of the .cs is usable here: a resync can rewrite a generated
+        /// file with identical content (mtime bumped, no diff at all), and conversely a class can change
+        /// without the sync ever running.
+        /// </summary>
+        private HashSet<string> DiffTableSchemas(TableStructure[] structures, ImportReport report) {
+            HashSet<string> toRewrite = new HashSet<string>();
 
             foreach (var structure in structures) {
-                if (ImporterExporter.TypeTables.Contains(structure.UnmodifiedName))
+                if (TypeTables.Contains(structure.UnmodifiedName))
                     continue;
 
-                // Collect new field names from columns
-                HashSet<string> newFields = new HashSet<string>();
-                if (structure.Items != null) {
-                    foreach (var col in structure.Items)
-                        newFields.Add(col.Name);
+                System.Type generatedType = FindGeneratedType(structure.Name);
+                if (generatedType == null)
+                    continue;
+
+                List<string> current = GetSchemaSignature(generatedType);
+                SyncedTableSchema baseline = syncedSchemas.Find(schema => schema.generatedName == structure.Name);
+
+                // No baseline: the assets on disk were written by a version that did not track schemas,
+                // or this table has not been synced since. Their schema cannot be trusted, so rewrite the
+                // table once. A brand new table lands here too, harmlessly: all of its assets are created
+                // anyway, and a created asset is always written.
+                if (baseline == null) {
+                    toRewrite.Add(structure.Name);
+                    report.schemaChanges.Add(new ImportReport.SchemaChangeInfo {
+                        tableName = structure.UnmodifiedName,
+                        baselineKnown = false
+                    });
+                    continue;
                 }
 
-                if (!previousFields.ContainsKey(structure.Name)) {
-                    // New class
-                    report.warnings.Add($"New class generated: {structure.Name} ({newFields.Count} fields)");
-                } else {
-                    HashSet<string> oldFields = new HashSet<string>(previousFields[structure.Name]);
-                    List<string> added = new List<string>();
-                    List<string> removed = new List<string>();
+                HashSet<string> previousFields = new HashSet<string>(baseline.fields);
+                HashSet<string> currentFields = new HashSet<string>(current);
 
-                    foreach (string f in newFields) {
-                        if (!oldFields.Contains(f)) added.Add(f);
-                    }
-                    foreach (string f in oldFields) {
-                        if (!newFields.Contains(f)) removed.Add(f);
-                    }
+                List<string> added = current.Where(field => !previousFields.Contains(field)).ToList();
+                List<string> removed = baseline.fields.Where(field => !currentFields.Contains(field)).ToList();
 
-                    if (added.Count > 0 || removed.Count > 0) {
-                        string changes = "";
-                        if (added.Count > 0) changes += $"+{added.Count} ({string.Join(", ", added)})";
-                        if (removed.Count > 0) {
-                            if (changes.Length > 0) changes += ", ";
-                            changes += $"-{removed.Count} ({string.Join(", ", removed)})";
-                        }
-                        report.warnings.Add($"Class updated: {structure.Name} \u2192 {changes}");
-                    }
-                }
+                if (added.Count == 0 && removed.Count == 0)
+                    continue;
+
+                toRewrite.Add(structure.Name);
+                report.schemaChanges.Add(new ImportReport.SchemaChangeInfo {
+                    tableName = structure.UnmodifiedName,
+                    baselineKnown = true,
+                    added = added,
+                    removed = removed
+                });
             }
 
-            // Cleanup
-            EditorPrefs.DeleteKey(editorPrefKeyPreviousFields);
+            return toRewrite;
+        }
+
+        /// <summary>
+        /// Advances the schema baseline for the tables that took part in this import. Called after
+        /// CreateAllInstances has returned, never before: the baseline must describe the schema the
+        /// assets on disk were actually written with. An import cancelled or crashed between code
+        /// generation and instance creation therefore leaves it untouched, and the next import redoes
+        /// the rewrite rather than mistaking the drift for an up to date table.
+        ///
+        /// Tables absent from this import keep their own baseline, stale but truthful: the diff will
+        /// fire the day they are imported again.
+        /// </summary>
+        private void CacheSyncedSchemas(TableStructure[] structures) {
+            foreach (var structure in structures) {
+                if (TypeTables.Contains(structure.UnmodifiedName))
+                    continue;
+
+                System.Type generatedType = FindGeneratedType(structure.Name);
+                if (generatedType == null)
+                    continue;
+
+                SyncedTableSchema cached = syncedSchemas.Find(schema => schema.generatedName == structure.Name);
+                if (cached == null) {
+                    cached = new SyncedTableSchema();
+                    syncedSchemas.Add(cached);
+                }
+
+                cached.generatedName = structure.Name;
+                cached.fields = GetSchemaSignature(generatedType);
+            }
         }
 
         private static void CancelImport() {

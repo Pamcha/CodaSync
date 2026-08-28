@@ -22,7 +22,13 @@ namespace Com.Pamcha.CodaSync {
         private static string currentTableName;
         private static string currentFieldName;
 
-        public static void CreateAllInstances(TableStructure[] structures, TableRow[][] tablesRows, string path, ImportReport importReport) {
+        /// <summary>
+        /// tablesToRewrite holds the sanitized names of the tables whose generated class no longer
+        /// matches the schema their assets were written with (see TableImporter.DiffTableSchemas).
+        /// Every asset of those tables is saved even when its row did not change, so the YAML on disk
+        /// picks up the added keys and drops the removed ones.
+        /// </summary>
+        public static void CreateAllInstances(TableStructure[] structures, TableRow[][] tablesRows, string path, ImportReport importReport, HashSet<string> tablesToRewrite = null) {
             report = importReport;
             allStructures = structures;
             LoadAssetRefs(structures, tablesRows);
@@ -40,6 +46,7 @@ namespace Com.Pamcha.CodaSync {
                     Directory.CreateDirectory(instancePath);
 
                 instances[structures[i]] = CreateInstances(structures[i], tablesRows[i], instancePath, out TableImportState state);
+                state.forceRewrite = tablesToRewrite != null && tablesToRewrite.Contains(structures[i].Name);
                 states[structures[i]] = state;
             }
 
@@ -67,6 +74,9 @@ namespace Com.Pamcha.CodaSync {
             public int created;
             public int skipped;
             public int renamed;
+            // The table's generated class changed since its assets were last written, so all of them
+            // are saved regardless of whether their row changed.
+            public bool forceRewrite;
             // Aligned with the instances array. null = the asset was created this import (no diff needed);
             // non-null = EditorJsonUtility snapshot of the pre-existing asset before fields were written.
             public string[] beforeSnapshots;
@@ -332,13 +342,27 @@ namespace Com.Pamcha.CodaSync {
                 // Note: image fields are assigned asynchronously (LoadImage coroutine) after this
                 // snapshot, so a row whose only change is an image is currently seen as unchanged.
                 string after = EditorJsonUtility.ToJson(instances[i]);
-                if (after != state.beforeSnapshots[i]) {
-                    updated++;
+                bool dataChanged = after != state.beforeSnapshots[i];
+
+                if (dataChanged) updated++;
+                else unchanged++;
+
+                // The count stays driven by the data diff, the save by "data changed OR schema changed".
+                // An asset rewritten only because its class gained or lost a field carries the same data
+                // as before, so counting it as updated would bring back the over-count fixed in 1.3.0.
+                if (dataChanged || state.forceRewrite) {
                     EditorUtility.SetDirty(instances[i]);
                     AssetDatabase.SaveAssetIfDirty(instances[i]);
-                } else {
-                    unchanged++;
                 }
+            }
+
+            if (state.forceRewrite) {
+                ImportReport.SchemaChangeInfo schemaChange = report.schemaChanges.Find(change => change.tableName == structure.UnmodifiedName);
+                // Every pre-existing asset is saved when the schema changed, and each one lands in
+                // exactly one of the two counters, so this is their total. Assets created this import
+                // are excluded on purpose: they are always written, schema change or not.
+                if (schemaChange != null)
+                    schemaChange.rewritten = updated + unchanged;
             }
 
             report.instances.Add(new ImportReport.InstanceInfo {

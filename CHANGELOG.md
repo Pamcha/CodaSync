@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-08-28
+### Fixed
+- **Assets were not rewritten when the generated class changed**: adding a column in Coda regenerated the class, but only the assets whose row had also changed were written back. The others stayed on disk with the old schema, and a key absent from the YAML does not fall back to the Unity default for its type: it keeps the C# default, so a `string` field added to the class reads as `null` instead of `""` on every asset that was skipped. On one production project this turned an optional filter (`if (x.field != "" && ...)`) into a permanent refusal that no data change could clear, and a full audit found more than a hundred missing fields across nine tables plus two fields left over from deleted columns, accumulated silently since 1.3.0. The rewrite trigger is no longer "the row changed" but "the generated class changed": when a table's field set differs from the one its assets were written with, every asset of that table is rewritten, whether or not its row moved. Each one ends up carrying every key of the current schema (an empty column gives a key with an empty value) and losing the keys of fields the class no longer has. Row ids, GUIDs and `.meta` files are untouched, so no reference breaks
+- The row-level diff introduced in 1.3.0 could never catch this on its own: it compares two in-memory objects under the same current class, so the YAML on disk never enters the comparison, and Unity serializes a null string as `""` anyway. The signal now comes from the class itself
+
+### Added
+- **Schema baseline stored on the Table Importer**: each table's field set, names and types, as of the last import that actually wrote its assets. It lives on the asset, so it is committed with the project and shared by the team. It is only advanced once the assets have been written, so an import cancelled or crashed between code generation and instance creation leaves it untouched and the next import redoes the rewrite instead of taking the drift for an up-to-date table
+- The importer is now flushed to disk at the end of every import instead of waiting for a manual Save Project. The row-id cache and the sync dates, which had the same fragility since 1.4.0, become durable as well
+- **"Schema changed" section in the import report**, naming the fields added and removed per table and how many assets were rewritten for that reason. A table with no baseline on record reports `no known schema for the assets on disk, all rewritten`
+- Schema comparison covers field types and not just names, so a column retyped in Coda (Text to Number) is detected even though the field name does not change. Private fields carrying `[SerializeField]` are included, so a change to the generated `__codaRowId` itself would be caught too
+
+### Changed
+- The `created / updated / unchanged` counters stay driven by the data diff: an asset rewritten only because its class gained or lost a field carries the same data as before and is still counted `unchanged`. The accurate count introduced in 1.3.0 is preserved
+- **Expect a large diff on the first sync after upgrading.** No table has a schema on record yet, so each imported table is rewritten once to repair whatever drift had accumulated. The diff stays proportional to that drift and not to the size of the tables: assets already carrying the current schema are rewritten with byte-identical content and do not appear in the diff at all. Assets carrying no `__codaRowId` belong to no row and are left alone; they surface through orphan detection instead
+
+### Removed
+- `SnapshotExistingFields()` and the `PreviousFields` EditorPrefs key. The class-change report used to compare a pre-codegen reflection snapshot against the Coda column names, two different vocabularies: it reported the generated `__codaRowId` as a removed field on every table, could not see a retype, and was overwritten at the start of every import, which meant an interrupted import lost the only record of the previous schema. Replaced by the persisted baseline, compared reflection against reflection
+
 ## [1.5.0] - 2026-08-08
 ### Added
 - **"Clean orphaned assets" window**: 1.4.0 started reporting the assets whose Coda row was deleted, without offering any way to act on them. A new button on the Table Importer opens a dedicated window listing them in three groups: **🗑 Safe to delete** (row gone, nothing references the asset, ticked by default), **⚠ Deleted but referenced** (something in the project still points at it, unticked, expandable to see and ping every referencing asset) and **❓ Unmanaged** (no row id, made by hand or predating 1.4.0, listed for information and never deletable). Deletion goes through a confirmation naming the exact files, then `AssetDatabase.DeleteAsset`. The sync itself still never deletes anything
