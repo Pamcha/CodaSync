@@ -4,7 +4,7 @@ Coda Sync for Unity
 An easy-to-use database system for your Unity Games based on Coda.io.
 With Coda Sync for Unity, you create and edit all your game’s data in a collaborative environment designed for teams!
 
-![](https://img.shields.io/badge/Coda-EE5A29?style=flat&logo=coda&logoColor=white)  ![](https://img.shields.io/badge/Unity-100000?style=flat&logo=unity&logoColor=white)  ![GitHub](https://img.shields.io/github/license/pamcha/codasync?label=Licence)  ![](https://img.shields.io/badge/Unity%202021.x-supported-blue.svg)  ![](https://img.shields.io/badge/Unity%202022.x-supported-blue.svg)  ![](https://img.shields.io/badge/Unity%206-supported-blue.svg)
+![](https://img.shields.io/badge/Coda-EE5A29?style=flat&logo=coda&logoColor=white)  ![](https://img.shields.io/badge/Unity-100000?style=flat&logo=unity&logoColor=white)  ![GitHub](https://img.shields.io/github/license/pamcha/codasync?label=Licence)  ![](https://img.shields.io/badge/Unity%206.0%20LTS-supported-blue.svg)  ![](https://img.shields.io/badge/Unity%206.3%20LTS-supported-blue.svg)
 
 <<[Website](https://coda.io/@pamcha/coda-sync "Coda Sync Website") | [Documentation](https://coda.io/@pamcha/coda-sync/documentation-1 "Coda Sync Documentation") | [Tips and tricks](https://coda.io/@pamcha/coda-sync/tips-tricks-9 "Coda Sync Tips and tricks")>>
 
@@ -27,7 +27,9 @@ You can sync again any time, whenever you have made a change to your data on you
 
 ## Installation
 ### Requirement
-![](https://img.shields.io/badge/Coda-EE5A29?style=flat&logo=coda&logoColor=white)  ![](https://img.shields.io/badge/Unity%202021.x-supported-blue.svg) ![](https://img.shields.io/badge/Unity%202022.x-supported-blue.svg)  ![](https://img.shields.io/badge/Unity%206-supported-blue.svg)
+![](https://img.shields.io/badge/Coda-EE5A29?style=flat&logo=coda&logoColor=white)  ![](https://img.shields.io/badge/Unity%206.0%20LTS-supported-blue.svg)  ![](https://img.shields.io/badge/Unity%206.3%20LTS-supported-blue.svg)
+
+Coda Sync requires Unity 6 (6000.0) or newer. Unity 2021 and 2022 are no longer supported since version 1.7.0.
 
 This project has a dependency to `com.unity.editorcoroutines` package that will be automatically installed if not already installed in your project.
 
@@ -46,6 +48,7 @@ Find the manifest.json file in the Packages folder of your project and add a lin
 * Converts table entries into instances of these classes
 * Stores all theses instances in a database class that is easily accessible for your code
 * And since these data are Scriptable Objects, they can easily be serialized and use anywhere in your game project
+* Each team member uses their own Coda API token, stored in their Unity preferences and never in the project, so it never reaches version control
 
 Works on all platform since what you get are Scriptable Objects.
 

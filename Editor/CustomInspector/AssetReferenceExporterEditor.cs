@@ -12,6 +12,15 @@ namespace Com.Pamcha.CodaSync {
             script = (AssetReferenceExporter)target;
         }
 
+        private void OnEnable() {
+            // The connection status can change without any input on this inspector
+            CodaTokenStatus.Changed += Repaint;
+        }
+
+        private void OnDisable() {
+            CodaTokenStatus.Changed -= Repaint;
+        }
+
         public override void OnInspectorGUI() {
             serializedObject.Update();
 
@@ -19,6 +28,8 @@ namespace Com.Pamcha.CodaSync {
 
 
             EditorGUILayout.Space(30);
+
+            CodaSyncGUI.DrawConnectionStatus(script);
 
             if (GUILayout.Button("Update Asset List"))
                 script.LoadAssets();
@@ -47,8 +58,10 @@ namespace Com.Pamcha.CodaSync {
 
             EditorGUILayout.Space(20);
 
-            if (GUILayout.Button("Export Assets References"))
-                script.ExportReferences();
+            using (new EditorGUI.DisabledScope(!CodaSyncGUI.CanSendRequests(script))) {
+                if (GUILayout.Button(new GUIContent("Export Assets References", CodaSyncGUI.DisabledRequestTooltip(script))))
+                    script.ExportReferences();
+            }
 
              if (GUILayout.Button("Check for Duplicate Asset Paths"))
                 script.CheckForDuplicateAssetPaths(); 

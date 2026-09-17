@@ -107,11 +107,13 @@ namespace Com.Pamcha.CodaSync {
             EditorApplication.delayCall -= DeferredTableListRefresh;
 
             // The asset may have been destroyed or reconfigured between the OnValidate burst and now.
-            if (this == null || requester == null || !docIdFound)
+            // Without a token on this computer, or with one Coda already rejected, stay silent: the
+            // inspector says why, and a teammate who never syncs sees no request and no progress bar.
+            if (this == null || !CanReachCoda(userInitiated: false))
                 return;
 
             EditorUtility.DisplayProgressBar("Coda Table Import", "Requesting tables list", 0);
-            GetTableList(OnUpdateTableList);
+            GetTableList(OnUpdateTableList, userInitiated: false);
         }
 
         private void OnCompilation(string s, CompilerMessage[] messages) {
@@ -188,8 +190,7 @@ namespace Com.Pamcha.CodaSync {
         public void RefreshRowIdCache(System.Action onDone) {
             documentId = GetDocumentIdFromURL();
 
-            if (requester == null || !docIdFound) {
-                EditorUtility.DisplayDialog("Coda Sync", "Can't reach Coda: check the Requester and the document URL on this importer.", "OK");
+            if (!CanReachCoda(userInitiated: true)) {
                 onDone?.Invoke();
                 return;
             }
@@ -218,7 +219,7 @@ namespace Com.Pamcha.CodaSync {
             for (int i = 0; i < dataRequests.Length; i++) {
                 if (!TryGetResponseJson(dataRequests[i], out _)) {
                     string tableName = i < syncedRowIds.Count ? syncedRowIds[i].tableName : "unknown";
-                    Debug.LogWarning($"⚠️ <b>[CodaSync]</b> Empty/failed row data response for table \"{tableName}\": {dataRequests[i].error ?? "no content"}. Row ids were left as they were (the table may have been deleted or renamed in Coda).");
+                    CodaApiError.Report(dataRequests[i], requester, $"table \"{tableName}\"", "Row ids were left as they were.", showDialog: true);
                     onDone?.Invoke();
                     return;
                 }
@@ -283,6 +284,9 @@ namespace Com.Pamcha.CodaSync {
         /// Fetches table structures and row data for selected tables, then logs a full name validation report.
         /// </summary>
         public void CheckNames() {
+            if (!CanReachCoda(userInitiated: true))
+                return;
+
             List<TableDescriptionData> tables = new List<TableDescriptionData>();
             for (int i = 0; i < tableSelection.Count; i++) {
                 if (tableSelection[i].selected && !IsTableIgnored(tableSelection[i].tableDescription.id))
@@ -321,7 +325,15 @@ namespace Com.Pamcha.CodaSync {
             TableRow[][] tablesRows = new TableRow[dataRequests.Length][];
             for (int i = 0; i < dataRequests.Length; i++) {
                 if (dataRequests[i].result != UnityWebRequest.Result.Success) {
-                    Debug.LogWarning($"\u26a0\ufe0f <b>[CodaSync]</b> Failed to fetch rows for table \"{structures[i].UnmodifiedName}\": {dataRequests[i].error}");
+                    string target = $"table \"{structures[i].UnmodifiedName}\"";
+
+                    // A rejected token fails every table the same way: say it once and stop there
+                    if (CodaApiError.Classify(dataRequests[i]) == CodaApiError.Kind.Unauthorized) {
+                        CodaApiError.Report(dataRequests[i], requester, target, "Name validation aborted.", showDialog: true);
+                        return;
+                    }
+
+                    CodaApiError.Report(dataRequests[i], requester, target, "Its row names were not checked.", showDialog: false);
                     tablesRows[i] = null;
                     continue;
                 }
@@ -418,6 +430,9 @@ namespace Com.Pamcha.CodaSync {
 
         #region TableStructure
         public void CreateScriptFiles() {
+            if (!CanReachCoda(userInitiated: true))
+                return;
+
             isCancelled = false;
 
             List<TableDescriptionData> tables = new List<TableDescriptionData>();
@@ -543,7 +558,7 @@ namespace Com.Pamcha.CodaSync {
                 // lookups/databases inconsistent with what's actually in Coda.
                 if (!TryGetResponseJson(dataRequests[i], out string json)) {
                     EditorUtility.ClearProgressBar();
-                    Debug.LogWarning($"⚠️ <b>[CodaSync]</b> Empty/failed row data response for table \"{structures[i].UnmodifiedName}\": {dataRequests[i].error ?? "no content"}. Import aborted.");
+                    CodaApiError.Report(dataRequests[i], requester, $"table \"{structures[i].UnmodifiedName}\"", "Import aborted.", showDialog: true);
                     return;
                 }
 

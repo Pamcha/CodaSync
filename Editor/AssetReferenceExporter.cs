@@ -11,6 +11,9 @@ namespace Com.Pamcha.CodaSync {
         [SerializeField] private string[] assetFolder;
         [SerializeField] private Object[] assets = new Object[0];
 
+        // Each Type Table is written by its own request: only the first failure of an export opens a dialog
+        private bool exportFailureReported;
+
 
         protected override void OnValidate() {
             base.OnValidate();
@@ -19,6 +22,11 @@ namespace Com.Pamcha.CodaSync {
         }
 
         public void ExportReferences () {
+            // Checked before the progress bar, which used to stay on screen when the Requester or the URL was missing
+            if (!CanReachCoda(userInitiated: true))
+                return;
+
+            exportFailureReported = false;
             EditorUtility.DisplayProgressBar("Coda Table Import", "Fetching Table List", 0);
             GetTableList((tables) => GetTablesStructure(tables.ToList(), OnTableListResponse));
         }
@@ -96,7 +104,7 @@ namespace Com.Pamcha.CodaSync {
                 edit.rows[i].cells[2].column = assetPathColumn.Value.Id;
             }
 
-            requester.SetTableRows(documentId, table.Name, edit, OnTableEditResponse);
+            requester.SetTableRows(documentId, table.Name, edit, (req) => OnTableEditResponse(req, table.UnmodifiedName));
         }
 
         public void CheckForDuplicateAssetPaths()
@@ -135,9 +143,16 @@ namespace Com.Pamcha.CodaSync {
         #endif
         }
 
-        private void OnTableEditResponse(UnityWebRequest req)
+        private void OnTableEditResponse(UnityWebRequest req, string tableName)
         {
             EditorUtility.ClearProgressBar();
+
+            // A refused write (a read-only token, typically) must not pass for a sync
+            if (req.result != UnityWebRequest.Result.Success) {
+                CodaApiError.Report(req, requester, $"table \"{tableName}\"", "Asset references were not exported.", showDialog: !exportFailureReported);
+                exportFailureReported = true;
+                return;
+            }
 
             lastSyncDateString = $"{System.DateTime.UtcNow:R}";
             lastSyncLocalDateString = lastSyncDateString;

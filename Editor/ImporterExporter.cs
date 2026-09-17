@@ -18,6 +18,12 @@ namespace Com.Pamcha.CodaSync {
 
         protected bool docIdFound { get; private set; } = false;
 
+        public CodaRequester Requester { get => requester; }
+
+        // How the last table-list request failed, if it did. Lets the inspector explain a document the
+        // token can't reach. Only describes what Coda answered during this session.
+        private CodaApiError.Kind lastTableListError = CodaApiError.Kind.None;
+        internal CodaApiError.Kind LastTableListError { get => lastTableListError; }
 
 
         public static readonly List<string> TypeTables = new List<string>{
@@ -34,29 +40,59 @@ namespace Com.Pamcha.CodaSync {
         }
 
         #region GETs
-        public void GetTableList(Action<TableDescriptionData[]> callback) {
-            if (!docIdFound) {
-                EditorUtility.DisplayDialog("Import setup", "Can't find documentID. Check your Coda document URL field", "OK");
+        /// <param name="userInitiated">
+        /// False for the refresh that runs on its own when an importer is inspected: it opens no dialog,
+        /// and doesn't send a token Coda already rejected.
+        /// </param>
+        public void GetTableList(Action<TableDescriptionData[]> callback, bool userInitiated = true) {
+            if (!CanReachCoda(userInitiated))
                 return;
+
+            documentId = GetDocumentIdFromURL();
+            requester.GetTableListOfDoc(documentId, (req) => OnTableListResponse(req, callback, userInitiated));
+        }
+
+        private void OnTableListResponse(UnityWebRequest req, Action<TableDescriptionData[]> callback, bool userInitiated) {
+            if (!TryGetResponseJson(req, out string jsonString)) {
+                EditorUtility.ClearProgressBar();
+                lastTableListError = CodaApiError.Classify(req);
+                CodaApiError.Report(req, requester, "this document", "", showDialog: userInitiated);
+                return;
+            }
+
+            lastTableListError = CodaApiError.Kind.None;
+            callback(JsonConvert.DeserializeObject<TableListResponse>(jsonString).items);
+        }
+
+        /// <summary>
+        /// Checks what a request to Coda needs before sending one: a document id, a Requester, and an API
+        /// token on this computer. A request that fires on its own also stops at a token Coda already
+        /// rejected instead of sending it again. Dialogs only open when the user clicked for the request.
+        /// Call it before showing a progress bar, so a failed check never leaves one on screen.
+        /// </summary>
+        protected bool CanReachCoda(bool userInitiated) {
+            if (!docIdFound) {
+                if (userInitiated)
+                    EditorUtility.DisplayDialog("Import setup", "Can't find documentID. Check your Coda document URL field", "OK");
+                return false;
             }
 
             if (requester == null) {
-                EditorUtility.DisplayDialog("Import setup", "No Requester setup", "OK");
-                return;
+                if (userInitiated)
+                    EditorUtility.DisplayDialog("Import setup", "No Requester setup", "OK");
+                return false;
             }
 
-            documentId = GetDocumentIdFromURL();
-            requester.GetTableListOfDoc(documentId, (req) => OnTableListResponse(req, callback));
-        }
-
-        private void OnTableListResponse(UnityWebRequest req, Action<TableDescriptionData[]> callback) {
-            if (!TryGetResponseJson(req, out string jsonString)) {
-                EditorUtility.ClearProgressBar();
-                Debug.LogWarning($"⚠️ <b>[CodaSync]</b> Empty/failed response from Coda API: {req.error ?? "no content"}");
-                return;
+            if (!requester.HasToken) {
+                if (userInitiated && EditorUtility.DisplayDialog("Coda Sync", $"No Coda API token on this machine for \"{requester.name}\". Each team member sets up their own token, in the Requester.", "Set up token", "Cancel"))
+                    CodaSyncGUI.SelectRequester(requester);
+                return false;
             }
 
-            callback(JsonConvert.DeserializeObject<TableListResponse>(jsonString).items);
+            if (!userInitiated && CodaTokenStatus.GetState(requester) == TokenState.Rejected)
+                return false;
+
+            return true;
         }
 
         /// <summary>
@@ -78,6 +114,7 @@ namespace Com.Pamcha.CodaSync {
 
         public void GetTablesStructure(List<TableDescriptionData> tables, Action<TableStructure[]> response,  (string, string) visibleOnlyParam = default) {
             if (tables.Count == 0) {
+                EditorUtility.ClearProgressBar();
                 EditorUtility.DisplayDialog("Table selection", "There is no table selected to import", "OK");
                 return;
             }
@@ -97,7 +134,7 @@ namespace Com.Pamcha.CodaSync {
             for (int i = 0; i < tableRequests.Length; i++) {
                 if (!TryGetResponseJson(tableRequests[i], out _)) {
                     EditorUtility.ClearProgressBar();
-                    Debug.LogWarning($"⚠️ <b>[CodaSync]</b> Empty/failed structure response for table \"{tableList[i].name}\": {tableRequests[i].error ?? "no content"}. Operation aborted.");
+                    CodaApiError.Report(tableRequests[i], requester, $"table \"{tableList[i].name}\"", "Operation aborted.", showDialog: true);
                     return;
                 }
             }

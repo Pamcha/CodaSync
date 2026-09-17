@@ -30,6 +30,14 @@ namespace Com.Pamcha.CodaSync {
             // the old OnValidate-driven refresh, which also fired on events unrelated to the user
             // looking at the asset (script reload, AssetDatabase.Refresh, focus regain...).
             script.ScheduleTableListRefresh();
+
+            // The connection status can change without any input on this inspector (a token pasted in
+            // the Requester, a 401 coming back)
+            CodaTokenStatus.Changed += Repaint;
+        }
+
+        private void OnDisable() {
+            CodaTokenStatus.Changed -= Repaint;
         }
 
         public override void OnInspectorGUI() {
@@ -44,16 +52,21 @@ namespace Com.Pamcha.CodaSync {
 
             EditorGUILayout.Space(30);
 
+            CodaSyncGUI.DrawConnectionStatus(script);
+            bool canSendRequests = CodaSyncGUI.CanSendRequests(script);
+            string requestTooltip = CodaSyncGUI.DisabledRequestTooltip(script);
 
-            GUIContent updateContent = new GUIContent(" Update Tables list", EditorGUIUtility.IconContent("Refresh").image);
-            if (GUILayout.Button(updateContent))
-                script.GetTableList(script.OnUpdateTableList);
+            using (new EditorGUI.DisabledScope(!canSendRequests)) {
+                GUIContent updateContent = new GUIContent(" Update Tables list", EditorGUIUtility.IconContent("Refresh").image, requestTooltip);
+                if (GUILayout.Button(updateContent))
+                    script.GetTableList(script.OnUpdateTableList);
+            }
 
             if (script.CanDisplayTableSelection && script.tableSelection.Count > 0)
-                DrawTableSelection();
+                DrawTableSelection(canSendRequests, requestTooltip);
         }
 
-        private void DrawTableSelection() {
+        private void DrawTableSelection(bool canSendRequests, string requestTooltip) {
             GUIStyle listStyle = new GUIStyle();
             GUIStyle headerStyle = new GUIStyle();
             int padding = 5;
@@ -129,11 +142,13 @@ namespace Com.Pamcha.CodaSync {
                 fixedHeight = 35
             };
 
+            // Both buttons call Coda: greyed out until this computer has a token for the Requester
+            EditorGUI.BeginDisabledGroup(!canSendRequests);
             EditorGUILayout.BeginHorizontal();
 
             // Import button (2/3 width)
             GUI.backgroundColor = new Color(0.4f, 0.8f, 0.4f);
-            GUIContent importContent = new GUIContent(" Import selected Tables", EditorGUIUtility.IconContent("Download-Available").image);
+            GUIContent importContent = new GUIContent(" Import selected Tables", EditorGUIUtility.IconContent("Download-Available").image, requestTooltip);
             if (GUILayout.Button(importContent, importButtonStyle, GUILayout.ExpandWidth(true))) {
                 script.CreateScriptFiles();
             }
@@ -141,12 +156,13 @@ namespace Com.Pamcha.CodaSync {
             // Validate Names button (1/3 width)
             GUI.backgroundColor = previousBg;
             GUIContent validateNamesContent = new GUIContent(" Validate Names", EditorGUIUtility.IconContent("Search Icon").image,
-                "Check table and column names for C# compatibility issues");
+                canSendRequests ? "Check table and column names for C# compatibility issues" : requestTooltip);
             if (GUILayout.Button(validateNamesContent, GUILayout.Width(EditorGUIUtility.currentViewWidth * 0.3f), GUILayout.Height(35))) {
                 script.CheckNames();
             }
 
             EditorGUILayout.EndHorizontal();
+            EditorGUI.EndDisabledGroup();
 
             GUI.backgroundColor = previousBg;
 

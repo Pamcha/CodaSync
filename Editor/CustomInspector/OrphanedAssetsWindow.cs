@@ -95,8 +95,15 @@ namespace Com.Pamcha.CodaSync {
             if (GUILayout.Button(new GUIContent("Rescan references", "Re-check which assets point at the orphans. Local, no network call"), EditorStyles.toolbarButton, GUILayout.Width(130)))
                 Rescan(scanReferences: true);
 
-            if (GUILayout.Button(new GUIContent("Re-fetch from Coda", "Ask Coda for the current row ids, to check this list against the live document"), EditorStyles.toolbarButton, GUILayout.Width(130)))
-                importer.RefreshRowIdCache(() => Rescan(scanReferences: true));
+            bool canSendRequests = CodaSyncGUI.CanSendRequests(importer);
+            string refetchTooltip = canSendRequests
+                ? "Ask Coda for the current row ids, to check this list against the live document"
+                : CodaSyncGUI.DisabledRequestTooltip(importer);
+
+            using (new EditorGUI.DisabledScope(!canSendRequests)) {
+                if (GUILayout.Button(new GUIContent("Re-fetch from Coda", refetchTooltip), EditorStyles.toolbarButton, GUILayout.Width(130)))
+                    importer.RefreshRowIdCache(() => Rescan(scanReferences: true));
+            }
 
             GUILayout.FlexibleSpace();
             EditorGUILayout.LabelField(importer.name, EditorStyles.miniLabel, GUILayout.Width(150));
