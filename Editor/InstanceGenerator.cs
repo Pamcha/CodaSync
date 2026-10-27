@@ -151,6 +151,9 @@ namespace Com.Pamcha.CodaSync {
             // file-already-exists guard in pass B, leaving the table's database list empty.
             Dictionary<string, ScriptableObject> byId = new Dictionary<string, ScriptableObject>();
             Dictionary<string, ScriptableObject> byName = new Dictionary<string, ScriptableObject>();
+            // Flat list of the same assets, kept because neither index covers them all once a name is
+            // shared by two files in different subfolders.
+            List<ScriptableObject> existingAssets = new List<ScriptableObject>();
             string[] existingFiles = Directory.GetFiles(path, "*.asset", SearchOption.AllDirectories);
             foreach (string file in existingFiles) {
                 // GetFiles joins with a backslash on Windows, AssetDatabase only accepts forward slashes
@@ -160,6 +163,8 @@ namespace Com.Pamcha.CodaSync {
                 if (existing == null || existing.GetType() != objectType)
                     continue;
 
+                existingAssets.Add(existing);
+
                 string existingId = rowIdField?.GetValue(existing) as string;
                 if (!string.IsNullOrEmpty(existingId))
                     byId[existingId] = existing;
@@ -167,8 +172,6 @@ namespace Com.Pamcha.CodaSync {
                     byName[Path.GetFileNameWithoutExtension(existingPath)] = existing;
             }
 
-            // Track seen names to skip duplicates (duplicates cause asset overwrites and broken lookups)
-            HashSet<string> seenNames = new HashSet<string>();
             int created = 0, skipped = 0, renamed = 0;
 
             dynamic[] instances = new dynamic[rows.Length];
@@ -181,6 +184,41 @@ namespace Com.Pamcha.CodaSync {
             List<int> toCreate = new List<int>();
             HashSet<ScriptableObject> matched = new HashSet<ScriptableObject>();
 
+            // Names shared by several rows, counted before anything is touched. Coda does not
+            // guarantee the order rows come back in, so importing the first one of a group bound the
+            // asset to whichever row happened to arrive first, possibly a duplicate created by
+            // mistake, and the asset turned orphan as soon as that row was the one deleted in Coda.
+            // Every row of the group is left out instead, so the conflict has no effect on the assets
+            // until it is fixed in Coda.
+            Dictionary<string, List<int>> rowsByName = new Dictionary<string, List<int>>();
+            for (int i = 0; i < rows.Length; i++) {
+                if (string.IsNullOrWhiteSpace(rows[i].Name))
+                    continue;
+
+                if (!rowsByName.TryGetValue(rows[i].Name, out List<int> sharingRows)) {
+                    sharingRows = new List<int>();
+                    rowsByName[rows[i].Name] = sharingRows;
+                }
+
+                sharingRows.Add(i);
+            }
+
+            HashSet<string> duplicateNames = new HashSet<string>();
+            for (int i = 0; i < rows.Length; i++) {
+                if (string.IsNullOrWhiteSpace(rows[i].Name))
+                    continue;
+
+                List<int> sharingRows = rowsByName[rows[i].Name];
+                // One warning per name, emitted on its first row, so the warnings follow the order of
+                // the table instead of the order of a dictionary.
+                if (sharingRows.Count < 2 || sharingRows[0] != i)
+                    continue;
+
+                duplicateNames.Add(rows[i].Name);
+                string rowNumbers = string.Join(", ", sharingRows.ConvertAll(row => $"#{row + 1}"));
+                report.warnings.Add($"Table \"{structure.UnmodifiedName}\" \u2192 \"{rows[i].Name}\" is used by rows {rowNumbers}. None imported until the duplicate is fixed in Coda.");
+            }
+
             // Pass A: validate rows, match existing assets (by id, then by name for migration) and
             // rename assets whose row was renamed in Coda.
             for (int i = 0; i < rows.Length; i++) {
@@ -190,8 +228,9 @@ namespace Com.Pamcha.CodaSync {
                     continue;
                 }
 
-                if (!seenNames.Add(rows[i].Name)) {
-                    report.warnings.Add($"Table \"{structure.UnmodifiedName}\" \u2192 row #{i + 1} \"{rows[i].UnmodifiedName}\" is a duplicate name (resolves to \"{rows[i].Name}\"). Skipped.");
+                // The whole group is skipped and already warned about above: no match by id or by
+                // name, no rename, no id written, no creation.
+                if (duplicateNames.Contains(rows[i].Name)) {
                     skipped++;
                     continue;
                 }
@@ -262,15 +301,43 @@ namespace Com.Pamcha.CodaSync {
                 instanceList.Add(instances[i]);
             }
 
-            // Orphan detection (report only, nothing is ever deleted here).
-            // Compare against the ids of ALL current rows, including skipped ones, so a skipped
-            // duplicate row doesn't flag its existing asset as orphaned.
+            // Ids of ALL current rows, skipped ones included, so a skipped duplicate row doesn't
+            // flag its existing asset as orphaned. Read twice below: to tell an asset held by one of
+            // the conflicting rows from one whose row was deleted, and by orphan detection itself.
             HashSet<string> currentRowIds = new HashSet<string>();
             for (int i = 0; i < rows.Length; i++) {
                 if (!string.IsNullOrEmpty(rows[i].Id))
                     currentRowIds.Add(rows[i].Id);
             }
 
+            // An asset already on disk under a duplicated name keeps everything it has: its row id,
+            // its fields, and its place in the table's database list, which is rebuilt from scratch on
+            // every import. File names are read here, after pass A, so an asset whose own row still
+            // owns it has already been renamed out of the conflict. An asset whose row was deleted in
+            // Coda is left to orphan detection below, and stays out of the list.
+            HashSet<ScriptableObject> conflicted = new HashSet<ScriptableObject>();
+            // Guarded so a table with no name conflict costs exactly what it used to.
+            if (duplicateNames.Count > 0) {
+                foreach (ScriptableObject existing in existingAssets) {
+                    if (matched.Contains(existing))
+                        continue;
+
+                    string existingName = Path.GetFileNameWithoutExtension(AssetDatabase.GetAssetPath(existing));
+                    if (!duplicateNames.Contains(existingName))
+                        continue;
+
+                    string existingId = rowIdField?.GetValue(existing) as string;
+                    if (!string.IsNullOrEmpty(existingId) && !currentRowIds.Contains(existingId))
+                        continue;
+
+                    conflicted.Add(existing);
+                    // Cast to dynamic so the call binds on the asset's real generated type: the list
+                    // is a List<generated type>, which has no Add(ScriptableObject).
+                    instanceList.Add((dynamic)existing);
+                }
+            }
+
+            // Orphan detection (report only, nothing is ever deleted here).
             foreach (var pair in byId) {
                 if (currentRowIds.Contains(pair.Key))
                     continue;
@@ -285,7 +352,7 @@ namespace Com.Pamcha.CodaSync {
 
             // Assets without an id that no current row adopted: hand-made / foreign
             foreach (var pair in byName) {
-                if (matched.Contains(pair.Value))
+                if (matched.Contains(pair.Value) || conflicted.Contains(pair.Value))
                     continue;
 
                 report.orphans.Add(new ImportReport.OrphanInfo {

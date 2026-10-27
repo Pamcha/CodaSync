@@ -136,13 +136,25 @@ namespace Com.Pamcha.CodaSync {
                 }
             }
 
-            // Report duplicate names: these cause asset overwrite and broken lookup resolution
-            foreach (var kvp in nameOccurrences) {
-                if (kvp.Value.Count > 1) {
-                    string rowNumbers = string.Join(", ", kvp.Value);
-                    issues.Insert(0, $"DUPLICATE Table \"{structure.UnmodifiedName}\" \u2192 \"{kvp.Key}\" is used by rows #{rowNumbers}. This will cause asset overwrites and broken lookups!");
-                }
+            // Duplicate names come first, ahead of the other issues: not one of their rows is
+            // imported, so they are what has to be fixed. Collected by walking the rows rather than
+            // the dictionary, so several duplicated names read in table order instead of whichever
+            // order the dictionary happens to enumerate.
+            List<string> duplicates = new List<string>();
+            for (int r = 0; r < rows.Length; r++) {
+                string assetName = rows[r].Name;
+                if (string.IsNullOrWhiteSpace(assetName) || !nameOccurrences.TryGetValue(assetName, out List<int> sharingRows))
+                    continue;
+
+                // One line per name, emitted on its first row. Row numbers are 1-based here.
+                if (sharingRows.Count < 2 || sharingRows[0] != r + 1)
+                    continue;
+
+                string rowNumbers = string.Join(", ", sharingRows.ConvertAll(row => $"#{row}"));
+                duplicates.Add($"DUPLICATE Table \"{structure.UnmodifiedName}\" \u2192 \"{assetName}\" is used by rows {rowNumbers}. None of them will be imported until the duplicate is fixed!");
             }
+
+            issues.InsertRange(0, duplicates);
 
             return issues;
         }
