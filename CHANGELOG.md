@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.2] - 2026-10-29
+### Fixed
+- **A percent or currency column no longer stops the whole import**: Coda sends these cells formatted with the doc's locale (`12,5 %`, `€1 234,50`, `$1,234.50`), and reading them as a number threw an exception that aborted the import, with no report and no sync date. They are now parsed whatever the locale. A percent arrives as a fraction, the value Coda formulas use (`12,5 %` gives `0.125`). A cell that still can't be read becomes a warning in the import report, and the rest of the import goes on.
+- **Lookups to another data table resolve whatever the target row is called**: a row name with a dash (`Demir - Base`) was never found, and neither was any row of a table that has a `name` column not ending with the row name (the 1.0.7 fix read that column instead of the asset's file name). The target is now loaded straight from its table folder, `{importer folder}/{Table}/{row name}.asset`, without Unity's search index. The search remains as a fallback for a table imported by another importer, and now compares file names.
+- **Coda Sync no longer depends on the Version Control package by accident**: it read JSON with the copy of Newtonsoft embedded in `com.unity.collab-proxy`, declared nowhere, so a project without Unity Version Control (common under git) couldn't compile it. It now depends on `com.unity.nuget.newtonsoft-json`, which Unity installs with the package.
+- **A failed "Test connection" no longer shows "Connected as …"**: when Coda couldn't be reached, the Requester kept the identity from an earlier check next to the time of the failed one. It now shows `Couldn't check the token: …` and `Last attempt at`.
+- **A refused asset reference export writes one console warning**, not one per Type Table, matching its single dialog.
+
+### Removed
+- The Requester's tip about tokens that can access all your docs: Coda now reports every token as scoped, restricted or not, so the tip could never show.
+
 ## [1.7.1] - 2026-10-27
 ### Fixed
 - **A duplicated row name no longer creates or links anything**: when two rows of a table shared the same display column, the first one Coda returned was imported and the others were skipped with a warning. An asset already on disk was left alone, which was right, but one that did not exist yet was created anyway and stamped with the row id of whichever row happened to arrive first. Coda does not guarantee that order, so the asset could end up bound to the wrong row, a duplicate created by mistake for instance, and deleting that row in Coda turned the asset into an orphan for good: the match by id fails, the match by name only serves assets that carry no id, and re-creation is refused because the file already exists, so the row that remains never takes the asset back and the repair is manual. Seen on a production project (table `Condition`): two conditions already referenced in a scene became orphans as soon as the duplicate row was deleted in Coda

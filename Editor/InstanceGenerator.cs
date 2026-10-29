@@ -1,11 +1,13 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
+using System.Text;
 using System.Text.RegularExpressions;
 using Unity.EditorCoroutines.Editor;
-using Unity.Plastic.Newtonsoft.Json;
+using Newtonsoft.Json;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
@@ -21,6 +23,7 @@ namespace Com.Pamcha.CodaSync {
         private static TableStructure[] allStructures;
         private static string currentTableName;
         private static string currentFieldName;
+        private static string currentRowName;
 
         /// <summary>
         /// tablesToRewrite holds the sanitized names of the tables whose generated class no longer
@@ -393,6 +396,7 @@ namespace Com.Pamcha.CodaSync {
                 if (instances[i] == null)
                     continue;
 
+                currentRowName = rows[i].UnmodifiedName;
                 SetFields(structure, objectType, instances[i], rows[i].Values);
 
                 // Freshly created this import (no "before" snapshot): always counted as created,
@@ -477,9 +481,72 @@ namespace Com.Pamcha.CodaSync {
                     }
                     break;
                 default:
-                    field.SetValue(instance, IsFieldEmpty(value) ? default : Convert.ChangeType(value, fieldType));
+                    if (IsFieldEmpty(value)) {
+                        field.SetValue(instance, null);
+                    } else if (TryConvertValue(column, value, fieldType, out object converted)) {
+                        field.SetValue(instance, converted);
+                    } else {
+                        // One unreadable cell used to throw out of the whole import
+                        report.warnings.Add($"Table \"{currentTableName}\" → row \"{currentRowName}\": can't read \"{value}\" as {fieldType.Name} in column \"{currentFieldName}\". Field left unchanged.");
+                    }
                     break;
             }
+        }
+
+        private static bool TryConvertValue(TableColumn column, string value, Type fieldType, out object converted) {
+            converted = null;
+
+            if (fieldType == typeof(float)) {
+                if (!TryParseCodaNumber(value, out float number))
+                    return false;
+
+                // Coda sends "25 %" for a percent cell whose value is 0.25, the number its formulas use
+                if (column.Format.Type == ColumnType.percent && !float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
+                    number /= 100f;
+
+                converted = number;
+                return true;
+            }
+
+            try {
+                converted = Convert.ChangeType(value, fieldType, CultureInfo.InvariantCulture);
+                return true;
+            } catch (Exception e) when (e is FormatException || e is InvalidCastException || e is OverflowException) {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Reads a number Coda may have formatted with the doc's locale: "12.5", "25 %", "€12,50", "1 234,50 €",
+        /// "$1,234.50". With both separators, the last one is the decimal point. With a single one, it is a
+        /// thousands separator when it repeats or has exactly three digits after it, the decimal point otherwise.
+        /// </summary>
+        internal static bool TryParseCodaNumber(string value, out float number) {
+            if (float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out number))
+                return true;
+
+            StringBuilder kept = new StringBuilder();
+            foreach (char c in value) {
+                if (char.IsDigit(c) || c == '.' || c == ',' || c == '-')
+                    kept.Append(c);
+            }
+
+            string s = kept.ToString();
+            int lastDot = s.LastIndexOf('.');
+            int lastComma = s.LastIndexOf(',');
+
+            if (lastDot >= 0 && lastComma >= 0) {
+                char thousands = lastDot > lastComma ? ',' : '.';
+                s = s.Replace(thousands.ToString(), "").Replace(',', '.');
+            } else if (lastDot >= 0 || lastComma >= 0) {
+                char separator = lastDot >= 0 ? '.' : ',';
+                int last = Math.Max(lastDot, lastComma);
+                bool repeats = s.IndexOf(separator) != last;
+                bool thousands = repeats || s.Length - last - 1 == 3;
+                s = thousands ? s.Replace(separator.ToString(), "") : s.Replace(',', '.');
+            }
+
+            return float.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out number);
         }
 
         private static void SetFieldArray(TableColumn column, dynamic instance, FieldInfo field, string value) {
@@ -516,7 +583,10 @@ namespace Com.Pamcha.CodaSync {
             dynamic asset = FindAssetByPath(assetType, assetName);
             if (asset != null) return asset;
 
-            // Fallback to search-based resolution for compatibility
+            asset = FindAssetInTableFolder(assetType, assetName);
+            if (asset != null) return asset;
+
+            // Fallback for a target table written by another importer, in another folder
             asset = FindAssetBySearch(assetType, assetName);
 
             if (asset == null && !IsFieldEmpty(assetName)) {
@@ -568,6 +638,18 @@ namespace Com.Pamcha.CodaSync {
         }
 
         /// <summary>
+        /// A data table writes each row at {basePath}/{Table}/{sanitized row name}.asset, and its class is named
+        /// after the table: the lookup value gives the path directly, with no search index involved.
+        /// </summary>
+        private static UnityEngine.Object FindAssetInTableFolder(Type assetType, string assetName) {
+            if (string.IsNullOrEmpty(basePath) || IsFieldEmpty(assetName))
+                return null;
+
+            string assetPath = $"{basePath}/{assetType.Name}/{CodaSyncUtils.SanitizeName(assetName)}.asset";
+            return AssetDatabase.LoadAssetAtPath(assetPath, assetType);
+        }
+
+        /// <summary>
         /// Search-based asset resolution (fallback for non-exported assets and SO relations)
         /// </summary>
         private static dynamic FindAssetBySearch(Type assetType, string assetName) {
@@ -575,25 +657,23 @@ namespace Com.Pamcha.CodaSync {
                 new[] { GetAssetDirectoryPath(assetType, assetName) } :
                 new[] { "Assets" };
 
-            string searchString = $"{assetName} t:{assetType.FullName}";
+            string normalizedExpected = CodaSyncUtils.SanitizeName(assetName);
+
+            // The file is named after the sanitized value: a raw "Demir - Base" makes Unity's search require the word "-"
+            string searchString = $"{normalizedExpected} t:{assetType.FullName}";
             searchString = searchString.Replace("UnityEngine.", "");
 
             string[] resultGUIDS = AssetDatabase.FindAssets(searchString, searchParam);
 
             for (int i = 0; i < resultGUIDS.Length; i++) {
                 string assetPath = AssetDatabase.GUIDToAssetPath(resultGUIDS[i]);
-                dynamic asset = AssetDatabase.LoadAssetAtPath(assetPath, assetType);
 
-                string normalizedExpected = CodaSyncUtils.SanitizeName(assetName);
+                // Compare the file name: on a dynamic, asset.name reads a generated 'name' field when the table has one
+                if (Path.GetFileNameWithoutExtension(assetPath) != normalizedExpected)
+                    continue;
 
-                // Extract just the filename from asset.name
-                // (handles case where SO has a 'name' field that shadows UnityEngine.Object.name)
-                string actualAssetName = asset?.name ?? "";
-                if (actualAssetName.Contains("/")) {
-                    actualAssetName = actualAssetName.Substring(actualAssetName.LastIndexOf('/') + 1);
-                }
-
-                if (asset != null && actualAssetName == normalizedExpected)
+                UnityEngine.Object asset = AssetDatabase.LoadAssetAtPath(assetPath, assetType);
+                if (asset != null)
                     return asset;
             }
 

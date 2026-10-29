@@ -2,7 +2,7 @@ using Com.Pamcha.Common.ReadOnlyField;
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
-using Unity.Plastic.Newtonsoft.Json;
+using Newtonsoft.Json;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Networking;

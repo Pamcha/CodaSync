@@ -1,6 +1,6 @@
 using System.Collections;
 using Unity.EditorCoroutines.Editor;
-using Unity.Plastic.Newtonsoft.Json;
+using Newtonsoft.Json;
 using UnityEngine;
 using UnityEngine.Networking;
 using static System.Text.Encoding;
@@ -61,8 +61,7 @@ namespace Com.Pamcha.CodaSync {
                 CodaTokenStatus.RecordValid(this, token, new TokenIdentity {
                     name = whoAmI.name,
                     email = whoAmI.loginId,
-                    tokenName = whoAmI.tokenName,
-                    scoped = whoAmI.scoped
+                    tokenName = whoAmI.tokenName
                 });
             } catch (JsonException) {
                 // The token still works, the inspector just can't say whose it is
@@ -73,7 +72,6 @@ namespace Com.Pamcha.CodaSync {
             public string name;
             public string loginId;
             public string tokenName;
-            public bool scoped;
         }
 
         #region GETRequests

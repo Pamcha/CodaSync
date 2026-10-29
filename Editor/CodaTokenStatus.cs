@@ -1,7 +1,7 @@
 using System;
 using System.Security.Cryptography;
 using System.Text;
-using Unity.Plastic.Newtonsoft.Json;
+using Newtonsoft.Json;
 using UnityEditor;
 
 namespace Com.Pamcha.CodaSync {
@@ -12,8 +12,6 @@ namespace Com.Pamcha.CodaSync {
         public string name;
         public string email;
         public string tokenName;
-        /// <summary>True when the token is restricted to some docs or tables.</summary>
-        public bool scoped;
     }
 
     /// <summary>

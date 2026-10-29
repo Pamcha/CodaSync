@@ -11,7 +11,7 @@ namespace Com.Pamcha.CodaSync {
         [SerializeField] private string[] assetFolder;
         [SerializeField] private Object[] assets = new Object[0];
 
-        // Each Type Table is written by its own request: only the first failure of an export opens a dialog
+        // Each Type Table is written by its own request: only the first failure of an export is reported
         private bool exportFailureReported;
 
 
@@ -149,7 +149,9 @@ namespace Com.Pamcha.CodaSync {
 
             // A refused write (a read-only token, typically) must not pass for a sync
             if (req.result != UnityWebRequest.Result.Success) {
-                CodaApiError.Report(req, requester, $"table \"{tableName}\"", "Asset references were not exported.", showDialog: !exportFailureReported);
+                // The other Type Tables usually fail the same way: one message, dialog and console alike
+                if (!exportFailureReported)
+                    CodaApiError.Report(req, requester, $"table \"{tableName}\"", "Asset references were not exported.", showDialog: true);
                 exportFailureReported = true;
                 return;
             }

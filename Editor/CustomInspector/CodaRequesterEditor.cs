@@ -78,11 +78,17 @@ namespace Com.Pamcha.CodaSync {
                 return;
             }
 
-            TokenIdentity identity = null;
+            // A check that never reached Coda says nothing about the token: showing "Connected as" from an earlier
+            // check, next to the time of this one, read as a connection that had just been verified
+            if (!string.IsNullOrEmpty(checkProblem)) {
+                EditorGUILayout.HelpBox($"Couldn't check the token: {checkProblem}", MessageType.Warning);
+                EditorGUILayout.LabelField($"Last attempt at {lastCheckTime:HH:mm:ss}", EditorStyles.miniLabel);
+                return;
+            }
 
             switch (CodaTokenStatus.GetState(requester)) {
                 case TokenState.Valid:
-                    if (CodaTokenStatus.TryGetIdentity(requester, out identity))
+                    if (CodaTokenStatus.TryGetIdentity(requester, out TokenIdentity identity))
                         EditorGUILayout.HelpBox($"Connected as {identity.name} ({identity.email}), token \"{identity.tokenName}\".", MessageType.Info);
                     else
                         EditorGUILayout.HelpBox("Connected to Coda.", MessageType.Info);
@@ -93,9 +99,7 @@ namespace Com.Pamcha.CodaSync {
                     break;
 
                 default:
-                    if (!string.IsNullOrEmpty(checkProblem))
-                        EditorGUILayout.HelpBox($"Couldn't check the token: {checkProblem}", MessageType.Warning);
-                    else if (checkAt > 0)
+                    if (checkAt > 0)
                         EditorGUILayout.HelpBox("Checking token...", MessageType.None);
                     else
                         EditorGUILayout.HelpBox("Token not checked yet: hit \"Test connection\".", MessageType.None);
@@ -104,9 +108,6 @@ namespace Com.Pamcha.CodaSync {
 
             if (lastCheckTime != default)
                 EditorGUILayout.LabelField($"Last checked at {lastCheckTime:HH:mm:ss}", EditorStyles.miniLabel);
-
-            if (identity != null && !identity.scoped)
-                EditorGUILayout.HelpBox("Tip: this token can access all your Coda docs. A token restricted to this game's doc limits the damage if it leaks (read only is enough to import, exporting asset references needs read and write).", MessageType.None);
         }
 
         private void DrawTokenField() {
